@@ -2,7 +2,13 @@ import { site, business, hero, services, footer, openingHours, faqs } from './da
 import { esc, jsonBlock, GENERATED_NOTE } from './html.js';
 
 const pageUrl = `${site.url}/`;
-const socialImage = hero.image.src;
+
+/**
+ * The image a share of this site shows, served from this site's own domain. Derived from
+ * `site.url` rather than hand-written, so it moves with the canonical address instead of
+ * pointing at whatever host the site used to live on.
+ */
+const socialCard = `${site.url}/${site.socialImage.file}`;
 
 /** The crawler files, named here so robots.txt and the build agree on one spelling. */
 export const SITEMAP_FILE = 'sitemap.xml';
@@ -30,7 +36,7 @@ export const structuredData = () => ({
   url: pageUrl,
   telephone: site.phone.href.replace(/^tel:/, ''),
   email: site.email,
-  image: socialImage,
+  image: hero.image.src,
   slogan: site.tagline,
   foundingDate: String(site.founded),
   areaServed: footer.area.join(' '),
@@ -94,13 +100,13 @@ export const head = () => `<meta charset="UTF-8">
 <meta property="og:title" content="${esc(site.title)}">
 <meta property="og:description" content="${esc(site.description)}">
 <meta property="og:url" content="${esc(pageUrl)}">
-<meta property="og:image" content="${esc(socialImage)}">
-<meta property="og:image:alt" content="${esc(hero.image.alt)}">
+<meta property="og:image" content="${esc(socialCard)}">
+<meta property="og:image:alt" content="${esc(site.socialImage.alt)}">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(site.title)}">
 <meta name="twitter:description" content="${esc(site.description)}">
-<meta name="twitter:image" content="${esc(socialImage)}">
+<meta name="twitter:image" content="${esc(socialCard)}">
 ${jsonBlock('application/ld+json', structuredData())}
 ${jsonBlock('application/ld+json', faqPage())}
 <link rel="preconnect" href="https://fonts.googleapis.com">

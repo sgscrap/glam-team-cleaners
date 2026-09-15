@@ -149,6 +149,34 @@ export function assertReferencesShip(html, shipped) {
 }
 
 /**
+ * The share card is named by absolute URL, so the reference guard above cannot see it:
+ * nothing on the page ever requests it, which means a renamed or missing file would ship
+ * silently and every share would show a broken preview instead of the brand card. Both meta
+ * tags are asserted against one value, because a preview where og:image and twitter:image
+ * disagree is a preview nobody can predict by reading the markup.
+ */
+export function assertShareImageShips(html, site, shipped) {
+  const expected = `${site.url}/${site.socialImage.file}`;
+  const declared = [
+    ['og:image', between(html, '<meta property="og:image" content="', '"')[0]],
+    ['twitter:image', between(html, '<meta name="twitter:image" content="', '"')[0]],
+  ];
+  const wrong = declared
+    .filter(([, value]) => value !== expected)
+    .map(([name, value]) => `${name} is ${value ?? 'missing'}, expected ${expected}`);
+  if (wrong.length) {
+    throw new Error(`The share image disagrees with site.socialImage: ${wrong.join('; ')}`);
+  }
+  if (!shipped.has(site.socialImage.file)) {
+    throw new Error(`The share image does not ship (${site.socialImage.file}): every share would show a broken preview`);
+  }
+  if (!between(html, '<meta property="og:image:alt" content="', '"')[0]?.trim()) {
+    throw new Error('og:image:alt is empty: the share card would be undescribed');
+  }
+  return site.socialImage.file;
+}
+
+/**
  * Validate every embedded data block exactly as emitted — this catches a broken escape or a
  * stray character in the real artifact, not in the object it came from.
  */

@@ -20,6 +20,17 @@ export const site = {
    * the page. Change this one value when the site moves to its own domain.
    */
   url: 'https://sgscrap.github.io/glam-team-cleaners',
+  /**
+   * The image a share of this site shows: a card set in the brand's own type and palette
+   * beside Emely's portrait, rather than a stock photograph, so a link to the site looks
+   * like the business. `file` is site-root relative — the URL a crawler fetches is built
+   * from it and `url` above, so the two can never point at different places. `alt`
+   * describes the card itself, not the photograph inside it.
+   */
+  socialImage: {
+    file: 'assets/social-preview.png',
+    alt: 'Glam Team Cleaners brand card with the business name, tagline, and a portrait of Emely.',
+  },
   announcement: 'Thoughtful cleaning for the spaces you call home',
   founded,
   est: `GTC / EST. ${founded}`,

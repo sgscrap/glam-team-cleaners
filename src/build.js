@@ -18,6 +18,7 @@ import {
   assertReferencesShip,
   assertRuntimeConfigKeys,
   assertSearchCopyFits,
+  assertShareImageShips,
   assertSiteUrl,
   assertStylePartialsNamed,
 } from './checks.js';
@@ -73,7 +74,9 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
   // Structure before content: a malformed page would otherwise surface as whichever
   // content guard happens to read the markup next.
   assertHtmlIsWellFormed(html);
-  const referenceCount = assertReferencesShip(html, new Set(shippedFiles()));
+  const shipped = new Set(shippedFiles());
+  const referenceCount = assertReferencesShip(html, shipped);
+  const shareImage = assertShareImageShips(html, site, shipped);
 
   const embedded = assertEmbeddedJsonParses(html);
   const records = embedded.filter(block => block.type === 'application/ld+json').map(block => block.data);
@@ -85,6 +88,7 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
 
   log(`index.html  ${html.length} bytes  ${usedIcons.length} icons (${usedIcons.join(', ')})`);
   log(`rendered output  well-formed, ${referenceCount} local references all ship`);
+  log(`share preview  ${shareImage}`);
   log(`structured data  ${businessRecord['@type']}  ${businessRecord.openingHours.length} opening-hours rules  ${businessRecord.hasOfferCatalog.itemListElement.length} services`);
   log(`${seo.FAQ_TYPE}  ${questionCount} questions, matched to the rendered page`);
   log(`runtime config  ${RUNTIME_KEYS.join(', ')}`);

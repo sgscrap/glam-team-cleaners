@@ -19,20 +19,15 @@ const pad2 = value => String(value).padStart(2, '0');
 const optionFor = id => services.items.find(service => service.id === id)?.option ?? '';
 
 /**
- * The eyebrow + heading pattern, with a single owner — every section title goes through
- * `title()` below, so a change to the pattern lands in one place.
- */
-const eyebrowLine = text => `<p class="eyebrow"><i aria-hidden="true"></i> ${esc(text)}</p>`;
-
-/**
  * A section title: an eyebrow above a heading whose second line is set in the italic accent
- * face. Both text values come from the section's data object, so no copy is hardcoded here.
+ * face. This is the one owner of the eyebrow + heading pattern, so a change to it lands in
+ * one place. Both text values come from the section's data object; no copy is hardcoded.
  *
  * `level` exists because the hero is an h1. `separator` exists because the intro keeps its
  * wrapper on one line while the full-width sections put the heading on its own line.
  */
 const title = ({ eyebrow, lead, accent }, { level = 'h2', separator = '\n' } = {}) =>
-  `${eyebrowLine(eyebrow)}${separator}<${level}>${esc(lead)}<br><em>${esc(accent)}</em></${level}>`;
+  `<p class="eyebrow"><i aria-hidden="true"></i> ${esc(eyebrow)}</p>${separator}<${level}>${esc(lead)}<br><em>${esc(accent)}</em></${level}>`;
 
 const intro = section => `<div class="section-intro">
 <div>${title(section, { separator: '' })}</div>

@@ -38,11 +38,10 @@ jobs:
       # can therefore never be published.
       - run: npm run check
 
+      # `npm run stage` copies the file list from src/ship.js — the same list the build's
+      # reference guard checks, so the published set cannot drift from the validated one.
       - name: Stage the runtime files
-        run: |
-          mkdir -p _site
-          cp index.html styles.css script.js sitemap.xml robots.txt _site/
-          cp -r assets _site/
+        run: npm run stage
 
       # Pages must already be enabled for this repository (Settings -> Pages -> Source:
       # GitHub Actions). Auto-enabling it here was tried and reverted: when the account plan

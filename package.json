@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Static marketing site for Glam Team Cleaners. index.html is generated from src/.",
+  "description": "Static marketing site for Glam Team Cleaners. index.html is generated from src/, and scripts/stage.js assembles the deployable file set from src/ship.js.",
   "scripts": {
     "build": "node src/build.js",
     "check": "node src/build.js --check",
+    "stage": "node scripts/stage.js",
     "hooks:install": "node scripts/install-hooks.js",
     "prepare": "node scripts/install-hooks.js"
   }

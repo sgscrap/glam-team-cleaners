@@ -19,6 +19,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import * as checks from '../src/checks.js';
 import * as seo from '../src/seo.js';
 import { site, business, icons, runtime, faqs } from '../src/data.js';
+import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-card.js';
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
 
@@ -27,8 +28,34 @@ const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8'
 const indexHtml = read('index.html');
 const stylesCss = read('styles.css');
 const partials = readdirSync(new URL('../src/styles', import.meta.url));
+const socialCard = readFileSync(new URL('../assets/social-preview.png', import.meta.url));
+const portrait = readFileSync(new URL('../assets/emely/emely-01.png', import.meta.url));
 const shipped = new Set(shippedFiles());
 const pageUrl = `${site.url}/`;
+
+/**
+ * A PNG with one text chunk and nothing else, so the reader can be exercised on structures the
+ * real card does not happen to contain — malformed provenance above all. Chunk CRCs and the
+ * IHDR body are left as zeroes: the reader is not a validator, and pretending otherwise would
+ * only test this helper.
+ */
+const pngChunk = (type, data) => {
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(data.length, 0);
+  header.write(type, 4, 'latin1');
+  return Buffer.concat([header, Buffer.from(data), Buffer.alloc(4)]);
+};
+const pngWithProvenance = text => Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  pngChunk('IHDR', Buffer.alloc(13)),
+  // iTXt: keyword \0 flags method language \0 translated \0 text, uncompressed
+  pngChunk('iTXt', Buffer.concat([
+    Buffer.from(SOCIAL_CARD_PROVENANCE_KEYWORD, 'latin1'),
+    Buffer.alloc(5),
+    Buffer.from(text, 'utf8'),
+  ])),
+  pngChunk('IEND', Buffer.alloc(0)),
+]);
 
 const records = checks.assertEmbeddedJsonParses(indexHtml);
 const blocks = records.map(({ data }) => data);
@@ -210,6 +237,42 @@ const CASES = [
     ],
   },
   {
+    guard: 'readPngText',
+    accepts: [
+      {
+        why: 'the real card under its own keyword',
+        run: () => checks.readPngText(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD),
+        expect: found => assert.ok(JSON.parse(found).source.lead, 'the provenance should carry the copy'),
+      },
+      { why: 'a PNG under a keyword it does not carry', run: () => checks.readPngText(socialCard, 'some-other-keyword'), expect: found => assert.equal(found, null) },
+      { why: 'a PNG with no text chunks at all', run: () => checks.readPngText(portrait, SOCIAL_CARD_PROVENANCE_KEYWORD), expect: found => assert.equal(found, null) },
+      { why: 'a file that is not a PNG', run: () => checks.readPngText(Buffer.from(indexHtml), SOCIAL_CARD_PROVENANCE_KEYWORD), expect: found => assert.equal(found, null) },
+      { why: 'nothing at all', run: () => checks.readPngText(null, SOCIAL_CARD_PROVENANCE_KEYWORD), expect: found => assert.equal(found, null) },
+      { why: 'the PNG signature and nothing after it', run: () => checks.readPngText(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), SOCIAL_CARD_PROVENANCE_KEYWORD), expect: found => assert.equal(found, null) },
+      { why: 'a chunk header cut short', run: () => checks.readPngText(socialCard.subarray(0, 40), SOCIAL_CARD_PROVENANCE_KEYWORD), expect: found => assert.equal(found, null) },
+      { why: 'a hand-built uncompressed iTXt chunk', run: () => checks.readPngText(pngWithProvenance('{"hello":"world"}'), SOCIAL_CARD_PROVENANCE_KEYWORD), expect: found => assert.equal(found, '{"hello":"world"}') },
+    ],
+  },
+  {
+    guard: 'assertSocialCardMatchesCopy',
+    accepts: [
+      {
+        why: 'the real card and the copy it was built from',
+        run: () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()),
+        expect: count => assert.equal(count, Object.keys(socialCardSource()).length),
+      },
+    ],
+    rejects: [
+      ['copy that has moved on since the card was built', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), lead: 'Spotlessly yours.' }), /lead is now "Spotlessly yours.", the card was built from "Beautifully clean."/],
+      ['a tagline the card never saw', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), tagline: 'Something else entirely.' }), /tagline is now/],
+      ['a portrait the card does not use', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), portrait: 'assets/emely/emely-03.png' }), /portrait is now "assets\/emely\/emely-03\.png"/],
+      ['a card with no provenance at all', () => checks.assertSocialCardMatchesCopy(portrait, SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /carries no provenance under "social-preview-source"/],
+      ['a card whose provenance was stripped by an editor', () => checks.assertSocialCardMatchesCopy(Buffer.from(indexHtml), SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /Regenerate it: npm run social/],
+      ['provenance that is not valid JSON', () => checks.assertSocialCardMatchesCopy(pngWithProvenance('{not json'), SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /provenance is not valid JSON/],
+      ['provenance with no source recorded in it', () => checks.assertSocialCardMatchesCopy(pngWithProvenance('{"format":1}'), SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /the card was built from null/],
+    ],
+  },
+  {
     guard: 'assertEmbeddedJsonParses',
     accepts: [
       {
@@ -322,7 +385,7 @@ test('every case names a guard that exists', () => {
 });
 
 test('every guard is asserted in both directions, unless it only reads', () => {
-  const queries = ['between', 'referencedFiles', 'unreferencedFiles'];
+  const queries = ['between', 'referencedFiles', 'unreferencedFiles', 'readPngText'];
   const withoutNegativeCase = CASES
     .filter(({ guard, rejects = [] }) => !queries.includes(guard) && rejects.length === 0)
     .map(({ guard }) => guard);

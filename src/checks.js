@@ -221,6 +221,83 @@ export function assertShareImageShips(html, site, shipped) {
 }
 
 /**
+ * The text a PNG carries under a keyword, or null if it carries none.
+ *
+ * The social card records what it was built from inside its own metadata rather than in a
+ * sidecar file, so the provenance cannot be regenerated separately from the image and drift
+ * away from it. Only the uncompressed iTXt and tEXt forms are read, which is what the
+ * generator writes; anything else reports as absent, and absent is a failure the guard below
+ * explains rather than a silence.
+ */
+export function readPngText(bytes, keyword) {
+  const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (!bytes || bytes.length < 8) return null;
+  if (SIGNATURE.some((byte, at) => bytes[at] !== byte)) return null;
+
+  let at = 8;
+  while (at + 12 <= bytes.length) {
+    const length = ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0;
+    const type = String.fromCharCode(bytes[at + 4], bytes[at + 5], bytes[at + 6], bytes[at + 7]);
+    const data = bytes.subarray(at + 8, at + 8 + length);
+
+    if (type === 'tEXt' || type === 'iTXt') {
+      const end = data.indexOf(0);
+      if (end > 0 && String.fromCharCode(...data.subarray(0, end)) === keyword) {
+        if (type === 'tEXt') return String.fromCharCode(...data.subarray(end + 1));
+        if (data[end + 1] !== 0) return null; // deflate-compressed: never what the generator writes
+        // keyword \0 flag method language \0 translated \0 text
+        let cursor = end + 3;
+        for (let field = 0; field < 2; field++) {
+          const next = data.indexOf(0, cursor);
+          if (next === -1) return null;
+          cursor = next + 1;
+        }
+        return new TextDecoder().decode(data.subarray(cursor));
+      }
+    }
+    if (type === 'IEND') return null;
+    at += length + 12;
+  }
+  return null;
+}
+
+/**
+ * The social card is the one asset the site never displays, so nothing shows you that it has
+ * gone stale: change the hero headline and every share keeps quoting the old one until
+ * somebody notices on LinkedIn. Its own pixels cannot be compared against the copy, so the
+ * card records the copy it was built from and this holds the two together.
+ */
+export function assertSocialCardMatchesCopy(card, keyword, expected) {
+  const recorded = readPngText(card, keyword);
+  if (recorded === null) {
+    throw new Error(
+      `The social card carries no provenance under "${keyword}", so what it was built from `
+      + `cannot be checked. It did not come from \`npm run social\`, or its metadata was `
+      + `stripped. Regenerate it: npm run social`,
+    );
+  }
+
+  let baked;
+  try {
+    baked = JSON.parse(recorded);
+  } catch (error) {
+    throw new Error(`The social card's provenance is not valid JSON (${error.message}). Regenerate it: npm run social`);
+  }
+
+  const drifted = Object.keys(expected)
+    .filter(field => expected[field] !== baked.source?.[field])
+    .map(field => `${field} is now ${JSON.stringify(expected[field])}, the card was built from ${JSON.stringify(baked.source?.[field] ?? null)}`);
+  if (drifted.length) {
+    throw new Error(
+      `The social card is out of date: ${drifted.join('; ')}. The card is rendered pixels, so `
+      + `it cannot follow the copy by itself, and every share of the site would keep showing the `
+      + `old one. Regenerate it: npm run social`,
+    );
+  }
+  return Object.keys(expected).length;
+}
+
+/**
  * Validate every embedded data block exactly as emitted — this catches a broken escape or a
  * stray character in the real artifact, not in the object it came from.
  */

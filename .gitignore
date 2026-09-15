@@ -7,6 +7,9 @@ node_modules/
 # Staging directory the Pages deploy workflow assembles and uploads.
 _site/
 
+# Fonts fetched and digest-checked by scripts/social-preview.py. Not part of the site.
+.cache/
+
 # Logs.
 *.log
 npm-debug.log*

@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { site, icons, runtime, ui, business } from './data.js';
+import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from './social-card.js';
 import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
@@ -20,6 +21,7 @@ import {
   assertSearchCopyFits,
   assertShareImageShips,
   assertSiteUrl,
+  assertSocialCardMatchesCopy,
   assertStylePartialsNamed,
   referencedFiles,
   unreferencedFiles,
@@ -84,6 +86,13 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
   // than arrive as one more entry in the list of references that do not ship.
   const shareImage = assertShareImageShips(html, site, shipped);
 
+  // The card ships and is named correctly; this asks whether it still says the right thing.
+  const cardFields = assertSocialCardMatchesCopy(
+    readFileSync(site.socialImage.file),
+    SOCIAL_CARD_PROVENANCE_KEYWORD,
+    socialCardSource(),
+  );
+
   const embedded = assertEmbeddedJsonParses(html);
   const records = embedded.filter(block => block.type === 'application/ld+json').map(block => block.data);
   const businessRecord = assertRecordPresent(records, business.type);
@@ -94,7 +103,7 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
 
   log(`index.html  ${html.length} bytes  ${usedIcons.length} icons (${usedIcons.join(', ')})`);
   log('rendered output  well-formed');
-  log(`share preview  ${shareImage}`);
+  log(`share preview  ${shareImage}  built from ${cardFields} fields of the current copy`);
   log(`structured data  ${businessRecord['@type']}  ${businessRecord.openingHours.length} opening-hours rules  ${businessRecord.hasOfferCatalog.itemListElement.length} services`);
   log(`${seo.FAQ_TYPE}  ${questionCount} questions, matched to the rendered page`);
   log(`runtime config  ${RUNTIME_KEYS.join(', ')}`);

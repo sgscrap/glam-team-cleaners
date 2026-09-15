@@ -1,8 +1,16 @@
 /**
  * Points git at the committed hooks in .githooks/ so the pre-commit checks — the generated
- * artifacts against src/, and the guard suite — run before every commit. Run on demand with
- * `npm run hooks:install`; also runs from `npm install` via the prepare script, so a fresh
- * clone wires itself up.
+ * artifacts against src/, and the guard suite — run before every commit.
+ *
+ * `node scripts/install-hooks.js` is the whole installation: the interpreter, and nothing else.
+ * Nothing here has a dependency, and this is the reason it matters — a clone that has never run
+ * `npm install` still gets a working gate, which it would not if installing were the entry point.
+ * `npm install` runs this same file from package.json's prepare hook, and `npm run hooks:install`
+ * runs it too; both are conveniences over the command above rather than the way in.
+ *
+ * Git has no mechanism to switch a hook on from the repository itself — core.hooksPath lives in
+ * .git/config, which a clone does not carry — so this remains a command someone runs once per
+ * clone. scripts/test.js reports the clone where it was never run.
  *
  * Written in node rather than a shell one-liner because the scripts have to work in
  * cmd.exe on Windows as well as sh.

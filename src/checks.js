@@ -1,5 +1,6 @@
 /**
- * Every assertion the build makes, each one named and callable on its own.
+ * Every assertion this project makes, each one named and callable on its own — about the page it
+ * emits, the files it publishes, and the commit gate that keeps all of it honest.
  *
  * They are separate from the assembly in build.js so that a guard can be exercised in
  * isolation, and so a failure names the rule that broke rather than the function it happened
@@ -423,4 +424,50 @@ export function assertPublishedUrlsAgree({ html, sitemap, robots }, site) {
     throw new Error(`Unexpected URLs published to crawlers: ${extra
       .map(([file, urls]) => `${file} (${urls.join(', ')})`).join('; ')}`);
   }
+}
+
+/* --- the gate the work has to pass through ------------------------------- */
+
+/**
+ * Package managers are the one family of command the pre-commit hook cannot use here.
+ *
+ * Nothing in this repository has a dependency — the build, the guards and the suite are plain
+ * node — so a checkout is never set up by installing. On a clone that has installed nothing,
+ * `npm run …` in the hook is not a check that fails; it is a command that cannot start, which is
+ * a commit gate that silently stands open. The hook runs `node` directly for that reason.
+ */
+const PACKAGE_MANAGERS = /\b(?:npm|npx|yarn|pnpm|bun)\b/;
+
+/**
+ * The pre-commit hook, asserted to run only what a bare checkout already has.
+ *
+ * The file is read the way the shell reads it, not the way a reviewer does: comments and quoted
+ * strings are dropped first, because a comment explaining that a developer can run `npm test`
+ * runs nothing, and a rule that rejected prose would be a rule people route around. What is left
+ * is the executable part, and it fails if a package manager or node_modules appears there — or if
+ * nothing node runs at all, since a hook reduced to `exit 0` blocks nothing while looking exactly
+ * like a gate that works.
+ *
+ * Returns the scripts the hook runs, so the suite can assert that both checks are still wired up
+ * and that the files they name exist. The other half of the property — that this hook is
+ * *installed* — is not assertable from in here and is reported by scripts/test.js instead.
+ */
+export function assertHookNeedsNoInstall(source) {
+  const executable = source
+    .split('\n')
+    .filter(line => !/^\s*#/.test(line))
+    .join('\n')
+    .replace(/'[^']*'|"[^"]*"/g, ' ');
+
+  const manager = PACKAGE_MANAGERS.exec(executable);
+  if (manager) {
+    throw new Error(`The pre-commit hook runs ${manager[0]}, so it needs something installed: on a clone that has never installed anything the commit gate cannot start. Run node directly.`);
+  }
+  if (/\bnode_modules\b/.test(executable)) {
+    throw new Error('The pre-commit hook reaches into node_modules, which a clone that has never installed anything does not have.');
+  }
+
+  const scripts = [...executable.matchAll(/(?:^|[;&|(\s])node\s+([^\s;&|>]+)/g)].map(([, script]) => script);
+  if (!scripts.length) throw new Error('The pre-commit hook runs no node script, so it refuses nothing.');
+  return [...new Set(scripts)];
 }

@@ -14,7 +14,7 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 import * as checks from '../src/checks.js';
 import * as seo from '../src/seo.js';
@@ -150,6 +150,32 @@ const CASES = [
     rejects: [
       ['a photograph rented from a stock library', () => checks.assertImagesAreLocal('<img src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1300" alt="Somebody else&#39;s kitchen">'), /loads pictures from another site.*images\.unsplash\.com/],
       ['a protocol-relative URL', () => checks.assertImagesAreLocal('<img src="//cdn.test/room.png" alt="A room">'), /loads pictures from another site.*cdn\.test/],
+    ],
+  },
+  {
+    guard: 'assertHookNeedsNoInstall',
+    accepts: [
+      {
+        why: 'the committed pre-commit hook',
+        run: () => checks.assertHookNeedsNoInstall(read('.githooks/pre-commit')),
+        expect: scripts => {
+          assert.deepEqual(scripts, ['src/build.js', 'scripts/test.js'], 'the hook runs the drift check and the guard suite');
+          for (const script of scripts) {
+            assert.ok(existsSync(new URL(`../${script}`, import.meta.url)), `${script} is missing`);
+          }
+        },
+      },
+      {
+        why: 'a hook that names npm in a comment and in a message but runs only node',
+        run: () => checks.assertHookNeedsNoInstall('# install with npm install\nnode scripts/test.js\necho "run npm test for detail"'),
+        expect: scripts => assert.deepEqual(scripts, ['scripts/test.js']),
+      },
+    ],
+    rejects: [
+      ['a hook that shells out to a package manager', () => checks.assertHookNeedsNoInstall('#!/bin/sh\nnpm run check'), /runs npm, so it needs something installed/],
+      ['a hook that reaches into node_modules', () => checks.assertHookNeedsNoInstall('#!/bin/sh\nnode_modules/.bin/prettier --check .'), /reaches into node_modules/],
+      ['a hook reduced to exiting clean', () => checks.assertHookNeedsNoInstall('#!/bin/sh\nexit 0'), /runs no node script/],
+      ['an empty hook file', () => checks.assertHookNeedsNoInstall(''), /runs no node script/],
     ],
   },
   {

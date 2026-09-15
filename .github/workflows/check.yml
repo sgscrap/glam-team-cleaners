@@ -20,3 +20,19 @@ jobs:
       # `npm run check` rebuilds in memory, runs every build guard, and compares the result
       # with the committed index.html, styles.css, sitemap.xml and robots.txt.
       - run: npm run check
+
+  guards:
+    name: Every guard still rejects what it exists to reject
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The job above can only ever prove that a guard passes, because it only ever runs them
+      # against content the build just accepted. A guard that has stopped guarding — a regex
+      # that now matches everything, a clause a refactor made unreachable — passes there
+      # forever. `npm test` exercises the failing direction too, and fails if a guard is added
+      # without one. No dependency install, for the same reason as above.
+      - run: npm test

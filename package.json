@@ -7,6 +7,7 @@
   "scripts": {
     "build": "node src/build.js",
     "check": "node src/build.js --check",
+    "test": "node --test",
     "stage": "node scripts/stage.js",
     "hooks:install": "node scripts/install-hooks.js",
     "prepare": "node scripts/install-hooks.js"

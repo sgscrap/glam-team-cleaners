@@ -1,10 +1,22 @@
 #!/bin/sh
 #
-# Blocks a commit whose generated artifacts no longer match src/.
+# Blocks a commit that would ship a page disagreeing with its source, or that arrives with a
+# guard which no longer rejects what it exists to reject.
 #
-# index.html and styles.css are build output. Committing them stale ships a page that
-# does not match its source, and the mismatch is invisible in review because the files
-# look plausible. The check rebuilds in memory and compares byte-for-byte.
+# Two checks, in this order:
+#
+#   1. index.html and styles.css are build output. Committing them stale ships a page that
+#      does not match its source, and the mismatch is invisible in review because the files
+#      look plausible. The check rebuilds in memory and compares byte-for-byte.
+#
+#   2. That check only ever proves a guard *passes*, because it only ever runs them against
+#      content the build has just accepted. A guard that quietly stopped guarding — a regex
+#      that now matches everything, a clause a refactor made unreachable — passes there
+#      forever. The suite asserts the failing direction as well, and this is what stops such a
+#      guard from being committed and surviving until CI, or until production.
+#
+# `node` directly rather than `npm run ...`, so a commit needs the interpreter and nothing
+# else. Both checks print nothing of their own on success, so a clean commit stays quiet.
 #
 # Installed by `npm run hooks:install`, which `npm install` also runs (prepare script).
 # Bypass only deliberately, with `git commit --no-verify`.
@@ -13,6 +25,24 @@ if ! node src/build.js --check >/dev/null; then
   echo ""
   echo "  This commit was blocked: the generated files are out of date with src/."
   echo "  Fix with the command printed above, then commit again."
+  echo ""
+  exit 1
+fi
+
+if ! guards=$(node scripts/test.js 2>&1); then
+  # The suite's own lines are the useful part when a guard fails; when it never ran at all
+  # there are none, and the reason is on the last lines of the raw output instead.
+  detail=$(printf '%s\n' "$guards" | grep -E '^(✖|ℹ (tests|pass|fail))' | head -20)
+  echo ""
+  echo "  This commit was blocked: the guard suite is not passing."
+  echo ""
+  if [ -n "$detail" ]; then
+    printf '%s\n' "$detail"
+  else
+    printf '%s\n' "$guards" | tail -4
+  fi
+  echo ""
+  echo "  Run \`npm test\` for the full detail."
   echo ""
   exit 1
 fi

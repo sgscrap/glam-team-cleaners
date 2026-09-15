@@ -1,7 +1,8 @@
 /**
- * Points git at the committed hooks in .githooks/ so the drift check runs before every
- * commit. Run on demand with `npm run hooks:install`; also runs from `npm install` via the
- * prepare script, so a fresh clone wires itself up.
+ * Points git at the committed hooks in .githooks/ so the pre-commit checks — the generated
+ * artifacts against src/, and the guard suite — run before every commit. Run on demand with
+ * `npm run hooks:install`; also runs from `npm install` via the prepare script, so a fresh
+ * clone wires itself up.
  *
  * Written in node rather than a shell one-liner because the scripts have to work in
  * cmd.exe on Windows as well as sh.
@@ -50,7 +51,7 @@ if (current === HOOKS_PATH) {
     git(['config', 'core.hooksPath', HOOKS_PATH]);
   } catch (error) {
     console.error(`Could not set core.hooksPath: ${error.message}`);
-    console.error('The drift check will not run before commits until this succeeds.');
+    console.error('The pre-commit checks will not run until this succeeds.');
     process.exit(1);
   }
   console.log(`Git hooks installed: core.hooksPath -> ${HOOKS_PATH}`);

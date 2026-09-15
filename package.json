@@ -1,0 +1,13 @@
+{
+  "name": "glam-team-cleaners",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static marketing site for Glam Team Cleaners. index.html is generated from src/.",
+  "scripts": {
+    "build": "node src/build.js",
+    "check": "node src/build.js --check",
+    "hooks:install": "node scripts/install-hooks.js",
+    "prepare": "node scripts/install-hooks.js"
+  }
+}

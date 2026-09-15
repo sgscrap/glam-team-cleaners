@@ -1,0 +1,22 @@
+name: Check
+
+# The backstop for the pre-commit hook: a local hook can be missing (it is per clone) or
+# bypassed with --no-verify, but a pull request cannot merge past this job.
+on:
+  push:
+  pull_request:
+
+jobs:
+  generated-artifacts:
+    name: Generated artifacts match src/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No dependency install: the build has none, and there is no lockfile for `npm ci`.
+      # `npm run check` rebuilds in memory, runs every build guard, and compares the result
+      # with the committed index.html, styles.css, sitemap.xml and robots.txt.
+      - run: npm run check

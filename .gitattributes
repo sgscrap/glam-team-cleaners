@@ -1,0 +1,19 @@
+# Line endings are pinned because `npm run check` compares the generated artifacts
+# byte-for-byte against the build output, and the build emits LF.
+#
+# Windows git defaults to core.autocrlf=true, which rewrites working copies to CRLF on
+# checkout. That would leave index.html and styles.css differing from the build output by
+# line endings alone, so the drift check would fail on a clean checkout and block every
+# commit for a reason that has nothing to do with the change.
+
+* text=auto
+
+index.html text eol=lf
+styles.css text eol=lf
+sitemap.xml text eol=lf
+robots.txt text eol=lf
+script.js text eol=lf
+src/** text eol=lf
+scripts/** text eol=lf
+.githooks/** text eol=lf
+.github/** text eol=lf

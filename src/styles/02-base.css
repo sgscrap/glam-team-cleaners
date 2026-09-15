@@ -1,0 +1,85 @@
+/* ==========================================================================
+   Base
+   ========================================================================== */
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 108px; }
+
+body {
+  margin: 0;
+  background: var(--ivory);
+  color: var(--ink);
+  font: 15px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0; letter-spacing: -0.06em; line-height: 1; font-weight: 600; }
+p { margin: 0; }
+a { color: inherit; text-decoration: none; }
+img { display: block; width: 100%; height: 100%; object-fit: cover; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.icon {
+  width: 18px; height: 18px; flex: none;
+  fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.skip-link {
+  position: absolute; left: 50%; top: -60px; z-index: 100;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  background: var(--espresso); color: var(--ivory);
+  font: 500 11px var(--mono); text-transform: uppercase;
+  transition: top 0.2s;
+}
+.skip-link:focus { top: 12px; }
+
+.section-pad { padding: var(--section-y) var(--gutter); }
+
+.eyebrow {
+  display: flex; align-items: center; gap: 9px;
+  margin-bottom: 22px;
+  color: var(--rose-deep);
+  font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.eyebrow i {
+  display: block; width: 7px; height: 7px;
+  border: 1px solid var(--rose-deep); border-radius: 50%;
+  background: var(--champagne);
+}
+
+h1 { font-size: clamp(52px, 6.4vw, 92px); }
+h2 { font-size: clamp(42px, 4.8vw, 70px); }
+h1 em, h2 em {
+  font-family: var(--serif); font-style: italic;
+  font-weight: 600; letter-spacing: -0.08em;
+}
+
+/* ==========================================================================
+   Buttons & links
+   ========================================================================== */
+.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 15px 22px; border: 1px solid transparent;
+  font: 500 10px var(--mono); letter-spacing: 0.05em; text-transform: uppercase;
+  transition: transform 0.2s, background 0.2s, color 0.2s, border-color 0.2s;
+}
+.button:hover { transform: translateY(-2px); }
+.button b { font-size: 15px; font-weight: 400; }
+.button-dark { background: var(--espresso); color: var(--ivory); }
+.button-rose { background: var(--rose-deep); color: #fffaf7; }
+.button-outline { border-color: var(--line-strong); color: var(--ink); background: none; }
+.button-outline:hover { border-color: var(--rose-deep); color: var(--rose-deep); }
+
+.under-link {
+  border: 0; border-bottom: 1px solid currentColor; background: none; padding: 0 0 4px;
+  font: 500 10px var(--mono); letter-spacing: 0.05em; text-transform: uppercase;
+}
+.under-link:hover { color: var(--rose-deep); }
+.under-link b { font-size: 15px; font-weight: 400; margin-left: 5px; }
+

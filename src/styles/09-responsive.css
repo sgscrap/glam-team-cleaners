@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Responsive — tablet
+   ========================================================================== */
+@media (max-width: 1000px) {
+  :root { --section-y: 88px; }
+
+  .main-nav {
+    display: none;
+    position: absolute; top: 100%; left: 0; right: 0;
+    flex-direction: column; gap: 18px;
+    padding: 24px var(--gutter);
+    background: var(--ivory);
+    border-bottom: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+  }
+  .main-nav.is-open { display: flex; }
+  .menu-toggle { display: block; }
+  .phone-link { display: none; }
+
+  .hero { grid-template-columns: 1fr; gap: 54px; }
+  .hero-art { max-width: 580px; width: 92%; margin-left: auto; }
+
+  .trust-strip ul { grid-template-columns: repeat(2, 1fr); gap: 28px; }
+  .why, .team, .booking { grid-template-columns: 1fr; gap: 48px; }
+  .why-media { height: 400px; }
+  .why-media, .team-portrait { max-width: 560px; margin-left: 0; }
+  .process-steps { grid-template-columns: repeat(2, 1fr); gap: 30px; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 520px; }
+  .testimonial-grid { grid-template-columns: 1fr; }
+  .footer-main { grid-template-columns: 1fr 1fr; gap: 38px; }
+  .mobile-cta { display: flex; }
+  body { padding-bottom: 74px; }
+}
+
+/* ==========================================================================
+   Responsive — phone
+   ========================================================================== */
+@media (max-width: 620px) {
+  :root { --gutter: 5.5vw; --section-y: 68px; }
+
+  html { scroll-padding-top: 90px; }
+  .announcement { height: 32px; font-size: 8.5px; }
+  .announcement p { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .site-header { height: 74px; }
+  .header-actions .button-dark { display: none; }
+
+  h1 { font-size: 50px; }
+  h2 { font-size: 42px; }
+
+  .section-intro { display: block; margin-bottom: 34px; }
+  .section-intro > p { margin-top: 20px; }
+
+  .hero-art { height: 388px; width: 94%; }
+  .hero-card { left: -16px; bottom: 20px; width: 168px; padding: 15px; }
+  .hero-card strong { font-size: 14px; }
+  .hero-caption { display: none; }
+
+  .trust-strip { padding-top: 40px; padding-bottom: 40px; }
+
+  .work-grid { grid-template-columns: 1fr; grid-auto-rows: 240px; }
+  .work-grid .work-large { grid-row: span 1; }
+  .process-steps { grid-template-columns: 1fr; }
+
+  .booking-form { padding: 28px 22px; }
+  .field-row { grid-template-columns: 1fr; }
+  .booking-submit { width: 100%; }
+
+  .faq-list summary { padding: 18px 18px; font-size: 15px; }
+  .faq-list details p { padding: 16px 18px 20px; }
+
+  .footer-main { grid-template-columns: 1fr; gap: 32px; }
+}

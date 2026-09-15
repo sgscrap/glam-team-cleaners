@@ -1,0 +1,49 @@
+/* ==========================================================================
+   Announcement bar
+   ========================================================================== */
+.announcement {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 0 var(--gutter); height: 36px;
+  background: var(--espresso); color: #f4e9dd;
+  font: 10px var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
+}
+.announcement a { color: var(--champagne); }
+.announcement b { font-size: 15px; font-weight: 400; margin-left: 5px; }
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+.site-header {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; align-items: center; gap: 34px;
+  height: 86px; padding: 0 var(--gutter);
+  background: var(--ivory);
+  border-bottom: 1px solid var(--line);
+  transition: box-shadow 0.25s, border-color 0.25s;
+}
+.site-header.is-scrolled { box-shadow: var(--shadow-sm); border-color: transparent; }
+
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; font-weight: 800; line-height: 0.95;
+  letter-spacing: -0.07em; text-transform: uppercase;
+}
+.brand em { font: 600 15px/1 var(--serif); letter-spacing: -0.08em; text-transform: none; }
+
+.brand-mark { display: flex; align-items: flex-end; gap: 2px; width: 28px; height: 28px; }
+.brand-mark i { display: block; width: 7px; background: var(--espresso); border-radius: 5px 5px 1px 1px; }
+.brand-mark i:nth-child(1) { height: 14px; }
+.brand-mark i:nth-child(2) { height: 25px; background: var(--rose); }
+.brand-mark i:nth-child(3) { height: 19px; }
+
+.main-nav { display: flex; gap: 24px; margin-left: auto; font: 10px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+.main-nav a { padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s; }
+.main-nav a:hover { color: var(--rose-deep); border-color: var(--rose-deep); }
+
+.header-actions { display: flex; align-items: center; gap: 20px; }
+.phone-link { display: inline-flex; align-items: center; gap: 7px; font: 10px var(--mono); letter-spacing: 0.03em; }
+.phone-link:hover { color: var(--rose-deep); }
+
+.menu-toggle { display: none; width: 28px; padding: 0; border: 0; background: none; }
+.menu-toggle i { display: block; height: 1px; margin: 6px 0; background: var(--espresso); }
+

@@ -1,0 +1,28 @@
+/* ==========================================================================
+   Glam Team Cleaners — design tokens
+   ========================================================================== */
+:root {
+  --espresso: #2c1d20;
+  --ink: #3a292d;
+  --ink-soft: #6f5f61;
+  --ivory: #fcfaf6;
+  --linen: #f4eee8;
+  --taupe: #b3a39b;
+  --rose: #c86c82;
+  --rose-deep: #9f4e64;
+  --champagne: #e9d7be;
+  --line: rgba(58, 41, 45, 0.16);
+  --line-strong: rgba(58, 41, 45, 0.3);
+  --shadow-sm: 0 2px 10px rgba(44, 29, 32, 0.06);
+  --shadow-md: 0 14px 35px rgba(44, 29, 32, 0.12);
+  --shadow-lg: 0 26px 60px rgba(44, 29, 32, 0.16);
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+  --gutter: 7vw;
+  --section-y: 118px;
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans: 'Manrope', Arial, sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+

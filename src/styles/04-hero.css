@@ -1,0 +1,44 @@
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+.hero {
+  display: grid; grid-template-columns: 1fr 0.88fr;
+  gap: 8vw; align-items: center;
+  padding-top: 74px; padding-bottom: 92px;
+}
+.hero-lede { max-width: 410px; margin: 30px 0 26px; color: var(--ink-soft); font-size: 15px; }
+.hero-actions { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+
+.hero-proof { display: flex; align-items: center; gap: 12px; margin-top: 44px; color: var(--taupe); }
+.hero-proof .stars { color: var(--rose); font-size: 12px; letter-spacing: 2px; }
+.hero-proof strong, .hero-proof small { display: block; }
+.hero-proof strong { color: var(--ink); font: 500 10px var(--mono); }
+.hero-proof small { font-size: 10px; }
+
+.hero-art { position: relative; height: 496px; }
+.hero-photo { height: 100%; overflow: hidden; }
+.hero-card {
+  position: absolute; left: -54px; bottom: 32px; width: 196px;
+  padding: 18px 20px; background: var(--ivory); box-shadow: var(--shadow-md);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.hero-card span { font: 10px var(--mono); color: var(--rose-deep); }
+.hero-card strong { font-size: 16px; line-height: 1.15; letter-spacing: -0.05em; }
+.hero-card em { font: 600 18px var(--serif); }
+.hero-card small { padding-top: 11px; border-top: 1px solid var(--line); font: 9px var(--mono); color: var(--taupe); text-transform: uppercase; }
+.hero-caption { position: absolute; top: 0; right: -26px; writing-mode: vertical-rl; font: 9px var(--mono); letter-spacing: 0.12em; color: var(--taupe); }
+
+/* ==========================================================================
+   Trust strip
+   ========================================================================== */
+.trust-strip {
+  background: var(--linen);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  padding-top: 52px; padding-bottom: 52px;
+}
+.trust-strip ul { display: grid; grid-template-columns: repeat(4, 1fr); gap: 34px; margin: 0; padding: 0; list-style: none; }
+.trust-strip li { display: flex; flex-direction: column; gap: 8px; }
+.trust-strip .icon { color: var(--rose-deep); width: 22px; height: 22px; margin-bottom: 4px; }
+.trust-strip strong { font: 600 16px/1.2 var(--serif); letter-spacing: -0.03em; }
+.trust-strip p { color: var(--ink-soft); font-size: 12.5px; }
+

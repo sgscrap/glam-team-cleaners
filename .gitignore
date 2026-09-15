@@ -1,0 +1,14 @@
+# Local editor/tooling metadata — not part of the site.
+.freebuff/
+
+# The build has no dependencies and installs none, but `npm install` creates this.
+node_modules/
+
+# Logs.
+*.log
+npm-debug.log*
+
+# OS/editor noise.
+.DS_Store
+Thumbs.db
+desktop.ini

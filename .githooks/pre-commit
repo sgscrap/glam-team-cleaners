@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# Blocks a commit whose generated artifacts no longer match src/.
+#
+# index.html and styles.css are build output. Committing them stale ships a page that
+# does not match its source, and the mismatch is invisible in review because the files
+# look plausible. The check rebuilds in memory and compares byte-for-byte.
+#
+# Installed by `npm run hooks:install`, which `npm install` also runs (prepare script).
+# Bypass only deliberately, with `git commit --no-verify`.
+
+if ! node src/build.js --check >/dev/null; then
+  echo ""
+  echo "  This commit was blocked: the generated files are out of date with src/."
+  echo "  Fix with the command printed above, then commit again."
+  echo ""
+  exit 1
+fi

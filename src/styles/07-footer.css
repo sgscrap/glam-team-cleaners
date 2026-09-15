@@ -1,0 +1,34 @@
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.site-footer { background: var(--espresso); color: var(--ivory); padding: 66px var(--gutter) 22px; }
+.footer-main { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 44px; }
+.site-footer .brand em { color: var(--champagne); }
+.site-footer .brand-mark i:nth-child(1), .site-footer .brand-mark i:nth-child(3) { background: var(--ivory); }
+.footer-brand p { max-width: 300px; margin-top: 18px; color: #bcaeaa; font-size: 12.5px; }
+.footer-col { display: flex; flex-direction: column; gap: 9px; }
+.footer-col h2 { margin-bottom: 8px; color: #9d8985; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.footer-col a, .footer-col p { color: #eee5de; font-size: 12px; }
+.footer-col p { color: #bcaeaa; line-height: 1.7; }
+.footer-col a:hover { color: var(--champagne); }
+.footer-bottom {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin-top: 60px; padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  color: #9d8985; font: 9.5px var(--mono);
+}
+.footer-bottom a { color: var(--ivory); }
+
+/* ==========================================================================
+   Mobile call bar
+   ========================================================================== */
+.mobile-cta {
+  display: none; position: fixed; z-index: 70; left: 0; right: 0; bottom: 0;
+  gap: 10px; padding: 12px 5vw 14px;
+  background: var(--ivory); border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(44, 29, 32, 0.08);
+  transition: transform 0.25s, opacity 0.25s;
+}
+.mobile-cta .button { flex: 1; padding: 13px 16px; }
+.mobile-cta.is-hidden { transform: translateY(110%); opacity: 0; pointer-events: none; }
+

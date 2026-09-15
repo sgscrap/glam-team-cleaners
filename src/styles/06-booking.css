@@ -1,0 +1,51 @@
+/* ==========================================================================
+   Booking
+   ========================================================================== */
+.booking { display: grid; grid-template-columns: 0.85fr 1fr; gap: 7vw; align-items: start; }
+.booking-copy > p:not(.eyebrow) { max-width: 360px; margin-top: 26px; color: var(--ink-soft); }
+.booking-points { display: flex; flex-direction: column; gap: 12px; margin: 30px 0 32px; padding: 24px 0 0; border-top: 1px solid var(--line); list-style: none; }
+.booking-points li { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.booking-points .icon { width: 16px; height: 16px; color: var(--rose-deep); }
+.booking-contact { display: flex; flex-direction: column; gap: 8px; font: 11px var(--mono); }
+.booking-contact a { display: inline-flex; align-items: center; gap: 8px; }
+.booking-contact a:hover { color: var(--rose-deep); }
+
+.booking-form {
+  display: flex; flex-direction: column; gap: 20px;
+  padding: 38px 36px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.booking-form label { display: flex; flex-direction: column; gap: 7px; font: 500 10px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+.booking-form input, .booking-form select, .booking-form textarea {
+  width: 100%; padding: 9px 0 11px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: transparent; outline: 0; resize: vertical;
+  font: 14px var(--sans); text-transform: none; letter-spacing: normal;
+}
+.booking-form select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 6px) 15px, 100% 15px;
+  background-size: 6px 6px, 6px 6px; background-repeat: no-repeat;
+}
+.booking-form input:focus, .booking-form select:focus, .booking-form textarea:focus { border-color: var(--rose-deep); }
+.booking-form input::placeholder, .booking-form textarea::placeholder { color: #b6a9a6; }
+.form-fields { display: flex; flex-direction: column; gap: 20px; }
+.booking-submit { align-self: flex-start; margin-top: 4px; }
+.form-note { color: var(--taupe); font: 9.5px var(--mono); }
+
+/* Form state is owned by a single class on .booking-form */
+.form-success, .form-error, .booking-reset { display: none; }
+.booking-form.is-sent .form-fields { display: none; }
+.booking-form.is-sent .form-success {
+  display: block; padding: 18px 20px;
+  background: var(--champagne); color: var(--ink);
+  font: 11.5px var(--mono); border-radius: var(--radius-sm);
+}
+.booking-form.is-sent .booking-reset { display: inline-block; }
+.booking-form.is-error .form-error { display: block; margin-top: 4px; color: var(--rose-deep); font: 11.5px var(--mono); }
+.booking-form.is-sending .booking-submit { opacity: 0.6; pointer-events: none; }
+

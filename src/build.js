@@ -46,8 +46,13 @@ function buildPage() {
    * canonical URL fails silently in a browser and only shows up in Search Console weeks
    * later, so both are checked here instead.
    */
-  if (!/^https?:\/\/[^/]+$/.test(site.url)) {
-    throw new Error(`site.url must be an absolute origin with no trailing slash or path, got: ${site.url}`);
+  /**
+   * `site.url` must be absolute and must not end in a slash, since every builder appends
+   * its own. It may carry a path: a GitHub Pages project site is served from a
+   * subdirectory, so an origin-only rule would reject the address the site really has.
+   */
+  if (!/^https?:\/\/[^/\s]+(?:\/[^/\s]+)*$/.test(site.url)) {
+    throw new Error(`site.url must be an absolute http(s) URL with no trailing slash, got: ${site.url}`);
   }
   if (!site.phone.href.startsWith('tel:+')) {
     throw new Error(`site.phone.href must be E.164 for structured data (tel:+...), got: ${site.phone.href}`);
@@ -186,8 +191,6 @@ function buildStyles() {
   log(`styles.css  ${partials.length} chars  ${styleFiles.length} partials in order`);
   return `/* ${GENERATED_NOTE} Built from ${STYLE_DIR}/*.css in order. */\n${partials}`;
 }
-
-/* --- write, or verify that the committed artifacts are current ----------- */
 
 /* --- crawler files ------------------------------------------------------ */
 

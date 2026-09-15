@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { site, icons, runtime, ui, business } from './data.js';
 import * as sections from './sections.js';
 import * as seo from './seo.js';
@@ -21,12 +21,17 @@ import {
   assertShareImageShips,
   assertSiteUrl,
   assertStylePartialsNamed,
+  referencedFiles,
+  unreferencedFiles,
 } from './checks.js';
 
 const checkOnly = process.argv.includes('--check');
 
 /** Check mode verifies rather than writes, so it does not narrate a build it never did. */
 const log = checkOnly ? () => {} : console.log;
+
+/** The published set, computed once: both directions of the ship-set check compare against it. */
+const shipped = new Set(shippedFiles());
 
 /* --- index.html --------------------------------------------------------- */
 
@@ -74,8 +79,9 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
   // Structure before content: a malformed page would otherwise surface as whichever
   // content guard happens to read the markup next.
   assertHtmlIsWellFormed(html);
-  const shipped = new Set(shippedFiles());
-  const referenceCount = assertReferencesShip(html, shipped);
+  // The share image first: it is the one reference nothing requests, so it is the one whose
+  // absence is only ever discovered from the meta tags, and it should say so by name rather
+  // than arrive as one more entry in the list of references that do not ship.
   const shareImage = assertShareImageShips(html, site, shipped);
 
   const embedded = assertEmbeddedJsonParses(html);
@@ -87,7 +93,7 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
   const questionCount = assertFaqMatchesPage(html, faqRecord);
 
   log(`index.html  ${html.length} bytes  ${usedIcons.length} icons (${usedIcons.join(', ')})`);
-  log(`rendered output  well-formed, ${referenceCount} local references all ship`);
+  log('rendered output  well-formed');
   log(`share preview  ${shareImage}`);
   log(`structured data  ${businessRecord['@type']}  ${businessRecord.openingHours.length} opening-hours rules  ${businessRecord.hasOfferCatalog.itemListElement.length} services`);
   log(`${seo.FAQ_TYPE}  ${questionCount} questions, matched to the rendered page`);
@@ -125,6 +131,23 @@ assertPublishedUrlsAgree({
   sitemap: artifacts[seo.SITEMAP_FILE],
   robots: artifacts[seo.ROBOTS_FILE],
 }, site);
+
+/**
+ * The ship-set check, both directions, run here rather than inside the page builder because
+ * only now do all the artifacts exist: the stylesheet is built after the page, and a
+ * reference it contains has to count exactly as much as one in the markup.
+ */
+const referenced = referencedFiles(
+  { html: artifacts['index.html'], css: artifacts['styles.css'] },
+  site,
+);
+const referenceCount = assertReferencesShip(referenced, shipped);
+const unreferenced = unreferencedFiles(referenced, shipped);
+const unreferencedBytes = unreferenced.reduce((total, file) => total + statSync(file).size, 0);
+const publishedSummary = unreferenced.length
+  ? `${unreferenced.length} referenced by nothing (${Math.round(unreferencedBytes / 1024)} KB): ${unreferenced.join(', ')}`
+  : 'every file referenced';
+console.log(`published set  ${shipped.size} files — ${referenceCount} references, all ship; ${publishedSummary}`);
 
 if (checkOnly) {
   const readIfPresent = name => {

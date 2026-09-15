@@ -6,6 +6,7 @@
  * to be sitting inside.
  */
 import { FAQ_TYPE, ROBOTS_FILE, SITEMAP_FILE, sitemapUrl } from './seo.js';
+import { ENTRY_FILES } from './ship.js';
 import { esc } from './html.js';
 
 /** Search results truncate past these lengths, silently losing the tail of the copy. */
@@ -134,18 +135,61 @@ export function assertHtmlIsWellFormed(html) {
 }
 
 /**
- * Every local reference in the page must resolve to a file the deploy publishes. Checking
- * the filesystem is not enough: a reference into src/ exists in the repository and would
- * still 404, because only the runtime files are staged.
+ * Every file the published artifacts point at, as site-root-relative paths.
+ *
+ * One definition of "referenced", shared by both directions of the ship-set check below: if
+ * the two asked the question differently, a file could be called dead weight by one and in
+ * use by the other.
+ *
+ * Three kinds of reference count. `src`/`href` in the page, `url()` in the stylesheet, and
+ * meta content naming this site — because the share card lives in an absolute URL in a meta
+ * tag and is fetched by no browser request at all, so a scan that read only `src`/`href`
+ * would report the site's own social preview as a file nothing uses.
  */
-export function assertReferencesShip(html, shipped) {
-  const references = [...html.matchAll(/(?:src|href)="([^"]*)"/g)]
-    .map(([, value]) => value)
-    .filter(value => value && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(value));
-  const paths = [...new Set(references.map(value => value.split(/[?#]/)[0]).filter(Boolean))];
-  const missing = paths.filter(path => !shipped.has(path));
-  if (missing.length) throw new Error(`The page references files that do not ship: ${missing.join(', ')}`);
-  return paths.length;
+export function referencedFiles({ html, css = '' }, site) {
+  const underSite = `${site.url}/`;
+  const asPath = value => (value.startsWith(underSite) ? value.slice(underSite.length) : value);
+  const values = [
+    ...[...html.matchAll(/(?:src|href)="([^"]*)"/g)].map(([, value]) => value),
+    ...[...html.matchAll(/content="([^"]*)"/g)]
+      .map(([, value]) => value)
+      .filter(value => value.startsWith(underSite)),
+    ...[...css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)].map(([, value]) => value),
+  ];
+  return new Set(values
+    .map(asPath)
+    .map(path => path.split(/[?#]/)[0])
+    .filter(path => path && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(path)));
+}
+
+/**
+ * Every reference must resolve to a file the deploy publishes. Checking the filesystem is not
+ * enough: a reference into src/ exists in the repository and would still 404, because only
+ * the runtime files are staged.
+ */
+export function assertReferencesShip(referenced, shipped) {
+  const missing = [...referenced].filter(path => !shipped.has(path));
+  if (missing.length) throw new Error(`The site references files that do not ship: ${missing.join(', ')}`);
+  return referenced.size;
+}
+
+/**
+ * The other direction: files that are published but that nothing published points at.
+ *
+ * No visitor pays for them, since no browser requests them — but they are deployed, they are
+ * counted in what the site publishes, and no other guard here can see them, because every
+ * other check asks whether something that should exist does. This one asks whether something
+ * that exists should.
+ *
+ * Entry files are exempt, being published by convention: the page a visitor lands on is not
+ * referenced by anything either.
+ *
+ * Reported rather than thrown. An unreferenced file is a decision to make — a photograph the
+ * client still wants, or a leftover — and a build that refused to run until someone made it
+ * would take that decision away by freezing every deploy in the meantime.
+ */
+export function unreferencedFiles(referenced, shipped) {
+  return [...shipped].filter(file => !referenced.has(file) && !ENTRY_FILES.includes(file));
 }
 
 /**

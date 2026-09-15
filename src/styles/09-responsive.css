@@ -21,9 +21,8 @@
   .hero-art { max-width: 580px; width: 92%; margin-left: auto; }
 
   .trust-strip ul { grid-template-columns: repeat(2, 1fr); gap: 28px; }
-  .why, .team, .booking { grid-template-columns: 1fr; gap: 48px; }
-  .why-media { height: 400px; }
-  .why-media, .team-portrait { max-width: 560px; margin-left: 0; }
+  .team, .booking { grid-template-columns: 1fr; gap: 48px; }
+  .team-portrait { max-width: 560px; margin-left: 0; }
   .process-steps { grid-template-columns: repeat(2, 1fr); gap: 30px; }
   .pricing-grid { grid-template-columns: 1fr; max-width: 520px; }
   .testimonial-grid { grid-template-columns: 1fr; }
@@ -58,7 +57,9 @@
   .trust-strip { padding-top: 40px; padding-bottom: 40px; }
 
   .work-grid { grid-template-columns: 1fr; grid-auto-rows: 240px; }
-  .work-grid .work-large { grid-row: span 1; }
+  .work-grid .work-large.has-photo { grid-row: span 1; }
+  .work-grid .no-photo figcaption strong { font-size: 22px; }
+  .checklist { grid-template-columns: 1fr; gap: 20px; }
   .process-steps { grid-template-columns: 1fr; }
 
   .booking-form { padding: 28px 22px; }

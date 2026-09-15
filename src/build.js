@@ -13,6 +13,7 @@ import {
   assertEmbeddedJsonParses,
   assertFaqMatchesPage,
   assertHtmlIsWellFormed,
+  assertImagesAreLocal,
   assertKnownIcons,
   assertPublishedUrlsAgree,
   assertRecordPresent,
@@ -157,6 +158,10 @@ const publishedSummary = unreferenced.length
   ? `${unreferenced.length} referenced by nothing (${Math.round(unreferencedBytes / 1024)} KB): ${unreferenced.join(', ')}`
   : 'every file referenced';
 console.log(`published set  ${shipped.size} files — ${referenceCount} references, all ship; ${publishedSummary}`);
+
+// What the page is allowed to show. A photograph the business does not own is not decoration
+// here: it stands in for work under a caption claiming that work was done.
+console.log(`photographs  ${assertImagesAreLocal(artifacts['index.html'])} in the page, all served from this site`);
 
 if (checkOnly) {
   const readIfPresent = name => {

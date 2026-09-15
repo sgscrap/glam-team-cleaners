@@ -138,6 +138,21 @@ const CASES = [
     ],
   },
   {
+    guard: 'assertImagesAreLocal',
+    accepts: [
+      {
+        why: 'the real page',
+        run: () => checks.assertImagesAreLocal(indexHtml),
+        expect: count => assert.ok(count > 0, 'the page still shows photographs of its own'),
+      },
+      { why: 'a page with no images at all', run: () => checks.assertImagesAreLocal('<p>text</p>'), expect: count => assert.equal(count, 0) },
+    ],
+    rejects: [
+      ['a photograph rented from a stock library', () => checks.assertImagesAreLocal('<img src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1300" alt="Somebody else&#39;s kitchen">'), /loads pictures from another site.*images\.unsplash\.com/],
+      ['a protocol-relative URL', () => checks.assertImagesAreLocal('<img src="//cdn.test/room.png" alt="A room">'), /loads pictures from another site.*cdn\.test/],
+    ],
+  },
+  {
     guard: 'assertSiteUrl',
     accepts: [
       { why: 'the real site URL', run: () => checks.assertSiteUrl(site) },

@@ -193,6 +193,24 @@ export function unreferencedFiles(referenced, shipped) {
 }
 
 /**
+ * No picture on the page may come from another site.
+ *
+ * A rented photograph is not decoration on this page: it is a portfolio, and a stock interior
+ * under a caption like "Kitchen reset" claims a job this business did not do, with nothing in
+ * the markup for a reader to tell the difference by. Keeping every photograph local is what
+ * makes those captions honest, and the mistake is invisible to review — a URL in the data looks
+ * like any other URL — so the build asks. Returns how many images the page carries.
+ */
+export function assertImagesAreLocal(html) {
+  const sources = [...html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/g)].map(([, src]) => src);
+  const offSite = sources.filter(src => /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(src));
+  if (offSite.length) {
+    throw new Error(`The page loads pictures from another site, so it illustrates work with photographs the business does not own: ${offSite.join(', ')}`);
+  }
+  return sources.length;
+}
+
+/**
  * The share card is named by absolute URL, so the reference guard above cannot see it:
  * nothing on the page ever requests it, which means a renamed or missing file would ship
  * silently and every share would show a broken preview instead of the brand card. Both meta

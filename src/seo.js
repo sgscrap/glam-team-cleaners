@@ -36,7 +36,7 @@ export const structuredData = () => ({
   url: pageUrl,
   telephone: site.phone.href.replace(/^tel:/, ''),
   email: site.email,
-  image: hero.image.src,
+  image: `${site.url}/${hero.image.src}`,
   slogan: site.tagline,
   foundingDate: String(site.founded),
   areaServed: footer.area.join(' '),

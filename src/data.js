@@ -1,6 +1,12 @@
 /**
  * Single source of truth for all page content.
  * Nothing here is markup — the renderers in sections.js turn it into HTML.
+ *
+ * Every photograph on this page is one the business owns. That is a rule, not a preference: a
+ * rented stock interior under a heading like "Our work" claims a job nobody here did, and no
+ * alt text can make that honest. Where a real photograph does not exist yet the slot holds copy
+ * rather than borrowing one — see `gallery.items[].photo` — and the build refuses to emit a
+ * page whose images load from anywhere but this site.
  */
 
 /** Founding year feeds the hero stamp and the structured-data foundingDate alike. */
@@ -105,11 +111,15 @@ export const hero = {
   primary: { label: 'Book your clean', href: '#book' },
   secondary: { label: 'View our work', href: '#work' },
   rating: { stars: '★★★★★', value: '4.9 / 5', note: 'average client rating' },
+  /**
+   * Emely, not a room. The alt describes the photograph that is actually there — a portrait of
+   * a Glam Team cleaner — so the image and its description support the same claim.
+   */
   image: {
-    src: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1300&q=85',
-    alt: 'Warm, light-filled living room with a clean coffee table',
-    width: 1300,
-    height: 870,
+    src: 'assets/emely/emely-02.png',
+    alt: 'Emely, a Glam Team Cleaner, standing beside an ornate window',
+    width: 383,
+    height: 590,
   },
   card: { index: '01', lead: 'Spaces that', accent: 'feel like you.', note: 'Residential · Commercial' },
 };
@@ -139,12 +149,6 @@ export const services = {
       title: 'Regular cleaning',
       blurb: 'Reliable upkeep for a home that always feels ready for guests.',
       price: { from: '$120', unit: 'per visit' },
-      image: {
-        src: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80',
-        alt: 'Spotless modern kitchen with natural wood details',
-        width: 900,
-        height: 600,
-      },
     },
     {
       id: 'deep',
@@ -152,12 +156,6 @@ export const services = {
       title: 'Deep cleaning',
       blurb: 'A considered top-to-bottom refresh for every overlooked corner.',
       price: { from: '$220', unit: 'per visit' },
-      image: {
-        src: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=80',
-        alt: 'Sunlit living room after a deep clean',
-        width: 900,
-        height: 600,
-      },
     },
     {
       id: 'move',
@@ -165,12 +163,6 @@ export const services = {
       title: 'Move in / move out',
       blurb: 'Start fresh, leave beautifully, and hand over a space with confidence.',
       price: { from: '$280', unit: 'per visit' },
-      image: {
-        src: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=80',
-        alt: 'Bright empty apartment prepared for a move in clean',
-        width: 900,
-        height: 600,
-      },
     },
     {
       id: 'commercial',
@@ -178,12 +170,6 @@ export const services = {
       title: 'Office & commercial',
       blurb: 'Polished, welcoming workspaces that help your team do its best work.',
       price: { quote: true },
-      image: {
-        src: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=900&q=80',
-        alt: 'Clean and styled commercial dining area',
-        width: 900,
-        height: 600,
-      },
     },
   ],
 };
@@ -239,12 +225,6 @@ export const why = {
     { title: 'Finish strong', text: 'A final walkthrough before we call it done.' },
   ],
   cta: { label: 'Book your first clean', href: '#book' },
-  image: {
-    src: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1100&q=80',
-    alt: 'Cleaning professional preparing supplies before a clean',
-    width: 1100,
-    height: 1200,
-  },
 };
 
 export const process = {
@@ -265,40 +245,19 @@ export const gallery = {
   lead: 'Our work,',
   accent: 'in the wild.',
   aside: 'Little moments of order, calm, and light — made for real life.',
+  /**
+   * A portfolio entry is a photograph of a job this business did, or nothing at all.
+   *
+   * `photo` is the slot. Point it at a file this site ships, carrying that file's real width
+   * and height, and the cell becomes the picture. While it is null the entry renders as a
+   * typographic panel — the section stands on its own structure instead of on a photograph of
+   * somebody else's house. Nothing here may name an image the business does not own.
+   */
   items: [
-    {
-      src: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1300&q=80',
-      alt: 'Sunlit modern living room after a full clean',
-      width: 1300,
-      height: 900,
-      tag: 'Residential',
-      caption: 'Soft, serene, spotless.',
-      size: 'large',
-    },
-    {
-      src: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=80',
-      alt: 'Tidy kitchen with clear counters after cleaning',
-      width: 900,
-      height: 900,
-      tag: 'Kitchen reset',
-      caption: 'Counters you can breathe on.',
-    },
-    {
-      src: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80',
-      alt: 'Calm styled bedroom with fresh linens',
-      width: 900,
-      height: 900,
-      tag: 'Bedroom detail',
-      caption: 'That fresh-sheet feeling.',
-    },
-    {
-      src: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1300&q=80',
-      alt: 'Bright welcoming office space after cleaning',
-      width: 1300,
-      height: 900,
-      tag: 'Commercial',
-      caption: 'Make an entrance.',
-    },
+    { tag: 'Residential', caption: 'Soft, serene, spotless.', size: 'large', photo: null },
+    { tag: 'Kitchen reset', caption: 'Counters you can breathe on.', photo: null },
+    { tag: 'Bedroom detail', caption: 'That fresh-sheet feeling.', photo: null },
+    { tag: 'Commercial', caption: 'Make an entrance.', photo: null },
   ],
 };
 

@@ -37,6 +37,17 @@ const intro = section => `<div class="section-intro">
 const img = ({ src, alt, width, height }, { lazy = true, high = false } = {}) =>
   `<img src="${esc(src)}" alt="${esc(alt)}"${lazy ? ' loading="lazy"' : ''} width="${esc(width)}" height="${esc(height)}"${high ? ' fetchpriority="high"' : ''}>`;
 
+/**
+ * A portfolio cell. `photo` holds a photograph of a job this business did; while an entry has
+ * none, the cell is set in type rather than filled with a stock image of somebody else's room.
+ * The index is decorative — the caption already names what the entry is.
+ */
+const portfolioCell = (item, index) => {
+  const classes = [item.photo ? 'has-photo' : 'no-photo', item.size === 'large' ? 'work-large' : ''].filter(Boolean);
+  const media = item.photo ? img(item.photo) : `<span class="cell-index" aria-hidden="true">${pad2(index + 1)}</span>`;
+  return `<figure class="${classes.join(' ')}">${media}<figcaption>${esc(item.tag)} <strong>${esc(item.caption)}</strong></figcaption></figure>`;
+};
+
 const brandBlock = () =>
   `<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(site.brand.lead)}<br><em>${esc(site.brand.tail)}</em></span>`;
 
@@ -92,7 +103,6 @@ export const servicesSection = () => `<section class="services section-pad" id="
 ${intro(services)}
 <div class="service-grid">
 ${services.items.map((service, index) => `<article class="service-card">
-<div class="card-media">${img(service.image)}</div>
 <div class="card-body"><span class="card-index" aria-hidden="true">${pad2(index + 1)}</span><h3>${esc(service.title)}</h3><p>${esc(service.blurb)}</p><p class="card-price">${servicePrice(service)}</p><a class="card-link" href="#book" data-service="${esc(service.option)}">${esc(cta.bookService)} ${UP}</a></div>
 </article>`).join('\n')}
 </div>
@@ -114,8 +124,7 @@ ${tier.features.map(feature => `<li>${icon('check')}${esc(feature)}</li>`).join(
 <p class="pricing-note">${esc(pricing.note)}</p>
 </section>`;
 
-export const whySection = () => `<section class="why section-pad" id="why">
-<div class="why-media">${img(why.image)}</div>
+export const whySection = () => `<section class="section-pad" id="why">
 <div class="why-copy">
 ${title(why)}
 <p>${esc(why.body)}</p>
@@ -136,7 +145,7 @@ ${process.steps.map((step, index) => `<li><span aria-hidden="true">${pad2(index 
 export const gallerySection = () => `<section class="work section-pad" id="work">
 ${intro(gallery)}
 <div class="work-grid">
-${gallery.items.map(item => `<figure${item.size === 'large' ? ' class="work-large"' : ''}>${img(item)}<figcaption>${esc(item.tag)} <strong>${esc(item.caption)}</strong></figcaption></figure>`).join('\n')}
+${gallery.items.map(portfolioCell).join('\n')}
 </div>
 </section>`;
 

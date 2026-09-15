@@ -17,6 +17,9 @@
 
 .hero-art { position: relative; height: 496px; }
 .hero-photo { height: 100%; overflow: hidden; }
+/* The hero photograph is a portrait cropped to a near-square panel, so bias the crop upward —
+   centring it vertically would frame her waist. */
+.hero-photo img { object-position: center 14%; }
 .hero-card {
   position: absolute; left: -54px; bottom: 32px; width: 196px;
   padding: 18px 20px; background: var(--ivory); box-shadow: var(--shadow-md);

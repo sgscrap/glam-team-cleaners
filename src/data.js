@@ -14,11 +14,12 @@ export const site = {
     'Glam Team Cleaners — thoughtful residential and commercial cleaning with a polished touch. Book your clean in minutes.',
   tagline: 'Thoughtful cleaning with a polished touch. Residential and commercial, across the greater city.',
   /**
-   * Absolute origin, no trailing slash — the base for the canonical link, the
-   * Open Graph URL, and the structured-data @id. Placeholder domain; it matches
-   * the contact email and must be replaced with the live domain at launch.
+   * Absolute, no trailing slash — the base for the canonical link, the Open Graph URL,
+   * the sitemap's <loc>, and the structured-data @id. This is the address the site is
+   * actually served from, so crawlers are never pointed at a domain that is not serving
+   * the page. Change this one value when the site moves to its own domain.
    */
-  url: 'https://glamteamcleaners.com',
+  url: 'https://sgscrap.github.io/glam-team-cleaners',
   announcement: 'Thoughtful cleaning for the spaces you call home',
   founded,
   est: `GTC / EST. ${founded}`,

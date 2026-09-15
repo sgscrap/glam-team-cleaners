@@ -4,6 +4,9 @@
 # The build has no dependencies and installs none, but `npm install` creates this.
 node_modules/
 
+# Staging directory the Pages deploy workflow assembles and uploads.
+_site/
+
 # Logs.
 *.log
 npm-debug.log*

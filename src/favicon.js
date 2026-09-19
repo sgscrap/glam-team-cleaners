@@ -98,12 +98,17 @@ export const BRAND_MARK = {
 /** The partial that draws the mark, so the guard that ties the icons to it reads the right file. */
 export const BRAND_MARK_STYLESHEET = 'src/styles/03-header.css';
 
-const CANVAS = 64;
+/**
+ * The canvas the mark's numbers are in, which the geometry guard measures the published frames
+ * against. Exported because that guard reads the files from outside rather than drawing them, and
+ * the two have to be talking about the same coordinate space to be comparing anything.
+ */
+export const ICON_CANVAS = 64;
 
 /* Everything below is the mark's numbers at the icon's scale, so there is one description of the
    shape rather than one per file. */
 const MARK_BOX = BRAND_MARK.box * BRAND_MARK.scale;
-const MARK_LEFT = (CANVAS - MARK_BOX) / 2;
+const MARK_LEFT = (ICON_CANVAS - MARK_BOX) / 2;
 const BAR_WIDTH = BRAND_MARK.barWidth * BRAND_MARK.scale;
 const BAR_GAP = BRAND_MARK.gap * BRAND_MARK.scale;
 const BAR_HEIGHTS = BRAND_MARK.heights.map(height => height * BRAND_MARK.scale);
@@ -153,8 +158,8 @@ export const markShapes = (palette, { bleed = false } = {}) => {
       class: GROUND_CLASS,
       x: 0,
       y: 0,
-      width: CANVAS,
-      height: CANVAS,
+      width: ICON_CANVAS,
+      height: ICON_CANVAS,
       top: bleed ? 0 : GROUND_RADIUS,
       base: bleed ? 0 : GROUND_RADIUS,
     },
@@ -202,7 +207,7 @@ const shapeSvg = ({ fill, class: kind, x, y, width, height, top, base }) => {
  */
 export const faviconSvg = (palette = readPalette()) => `<?xml version="1.0" encoding="UTF-8"?>
 <!-- ${GENERATED_NOTE} Built from src/favicon.js. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ICON_CANVAS} ${ICON_CANVAS}">
 <title>${site.name}</title>
 <style>
   @media (prefers-color-scheme: dark) { .${GROUND_CLASS} { fill: none; } }
@@ -213,13 +218,13 @@ ${markShapes(palette).map(shapeSvg).join('\n')}
 
 /** What a browser reaches for by name at a site's root when a page declares nothing. */
 export const faviconIco = (palette = readPalette()) => ico(
-  ICO_SIZES.map(size => ({ size, pixels: draw(size, markShapes(palette), { canvas: CANVAS }) })),
+  ICO_SIZES.map(size => ({ size, pixels: draw(size, markShapes(palette), { canvas: ICON_CANVAS }) })),
 );
 
 /** The home-screen icon: the same mark, ground bled to the edges, at Apple's size for it. */
 export const touchIconPng = (palette = readPalette()) => png(
   TOUCH_SIZE,
-  draw(TOUCH_SIZE, markShapes(palette, { bleed: true }), { canvas: CANVAS }),
+  draw(TOUCH_SIZE, markShapes(palette, { bleed: true }), { canvas: ICON_CANVAS }),
 );
 
 /** Every icon the site publishes, keyed by the path it is published at. */

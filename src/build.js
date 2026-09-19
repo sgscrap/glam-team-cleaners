@@ -17,6 +17,7 @@ import {
   assertHtmlIsWellFormed,
   assertFaviconAdaptsToDarkScheme,
   assertIconsDeclared,
+  assertIconsMatchIntendedGeometry,
   assertIconsMatchBrandMark,
   assertImagesAreLocal,
   assertKnownIcons,
@@ -189,6 +190,15 @@ console.log(`icons  ${declaredIcons} declared and published: ${ICON_LINKS.map(({
 // colours do not vary at all.
 const schemeRules = assertFaviconAdaptsToDarkScheme(artifacts[ICON_FILES.svg]);
 console.log(`dark scheme  ${schemeRules} rule in ${ICON_FILES.svg}: the ground steps aside, the mark's colours stay`);
+
+// And what the rasters contain, read back out of the files rather than taken from the encoder that
+// wrote them: the drift check can only hold them to src/, which would carry a drawing bug just as
+// happily as the correct mark.
+const measuredFrames = assertIconsMatchIntendedGeometry({
+  ico: artifacts[ICON_FILES.ico],
+  touch: artifacts[ICON_FILES.touch],
+});
+console.log(`icon geometry  ${measuredFrames} frames measured against the mark: bar tops, bases, colours and the ground between them`);
 
 // And the shape they are drawn from, read out of the stylesheet that draws the header's mark: the
 // icon's numbers are geometry and the stylesheet's are CSS, and one silently drifting from the other

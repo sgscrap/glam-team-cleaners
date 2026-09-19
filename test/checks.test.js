@@ -23,7 +23,8 @@ import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
 import { MAX_BYTES, servedPhotographs } from '../src/photos.js';
-import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_FILES, ICON_LINKS } from '../src/favicon.js';
+import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_CANVAS, ICON_FILES, ICON_LINKS, markShapes, readPalette } from '../src/favicon.js';
+import { draw, ico, png } from '../src/raster.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -36,6 +37,18 @@ const shipped = new Set(shippedFiles());
 const pageUrl = `${site.url}/`;
 const headerCss = read(BRAND_MARK_STYLESHEET);
 const svgIcon = read(ICON_FILES.svg);
+const iconBytes = name => readFileSync(new URL(`../${name}`, import.meta.url));
+
+/**
+ * The two rasters, drawn from whatever a case hands in. That is how a broken encoder is put in
+ * front of the guard: it only ever sees files, so a case gives it files built from the wrong mark.
+ */
+const rastersFrom = (shapes, sizes = checks.REQUIRED_ICON_SIZES) => ({
+  ico: ico(sizes.ico.map(size => ({ size, pixels: draw(size, shapes, { canvas: ICON_CANVAS }) }))),
+  touch: png(sizes.touch, draw(sizes.touch, shapes, { canvas: ICON_CANVAS })),
+});
+
+const mark = markShapes(readPalette());
 
 /**
  * The host this site was published from before it moved to its own domain, spelled here as a
@@ -452,6 +465,48 @@ const CASES = [
       ['the retired host in a sitemap <loc>', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap().replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), robots: seo.robots() }), /sitemap\.xml/],
       ['the retired host in the Sitemap line of robots.txt', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, `${retiredHost}/glam-team-cleaners/${seo.SITEMAP_FILE}`) }), /robots\.txt/],
       ['the retired host only in the share card URL', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(`<meta property="og:image" content="${pageUrl}${site.socialImage.file}">`, `<meta property="og:image" content="${retiredHost}/glam-team-cleaners/${site.socialImage.file}">`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
+    ],
+  },
+  {
+    guard: 'assertIconsMatchIntendedGeometry',
+    accepts: [
+      {
+        why: 'the published .ico and home-screen icon',
+        run: () => checks.assertIconsMatchIntendedGeometry({
+          ico: iconBytes(ICON_FILES.ico),
+          touch: iconBytes(ICON_FILES.touch),
+        }),
+        expect: count => assert.equal(count, 4),
+      },
+    ],
+    rejects: [
+      // Every case draws the rasters from a wrong mark and measures them against the intended one,
+      // which is the position the build is in: the guard knows the mark, the files are whatever the
+      // encoder made of it.
+      ['a bar encoded eight units short', () => checks.assertIconsMatchIntendedGeometry(
+        rastersFrom([mark[0], { ...mark[1], height: mark[1].height - 8 }, mark[2], mark[3]]),
+      ), /16px frame of favicon\.ico: bar 1 paints rows 8-12 where the mark puts it at 8-14/],
+      ['a mark encoded upside down', () => checks.assertIconsMatchIntendedGeometry(
+        rastersFrom(mark.map(shape => ({ ...shape, y: ICON_CANVAS - shape.y - shape.height }))),
+      ), /16px frame of favicon\.ico: bar 1 paints rows 1-7 where the mark puts it at 8-14/],
+      ['a bar encoded sideways of where it belongs', () => checks.assertIconsMatchIntendedGeometry(
+        rastersFrom([mark[0], { ...mark[1], x: mark[1].x + 8 }, mark[2], mark[3]]),
+      ), /16px frame of favicon\.ico: bar 1 is #2c1d20 where the mark draws #fcfaf6/],
+      ['the rose encoded onto another bar', () => checks.assertIconsMatchIntendedGeometry(
+        rastersFrom([mark[0], mark[1], { ...mark[2], fill: '#fcfaf6' }, mark[3]]),
+      ), /16px frame of favicon\.ico: bar 2 is #fcfaf6 where the mark draws #c86c82/],
+      ['an .ico that never got a size a shortcut asks for', () => checks.assertIconsMatchIntendedGeometry(
+        rastersFrom(mark, { ico: [16, 32], touch: 180 }),
+      ), /favicon\.ico carries 16px, 32px and a tab, a bookmarks bar and a shortcut ask it for 16px, 32px, 48px/],
+      ['a home-screen icon whose ground never bled to the edges', () => checks.assertIconsMatchIntendedGeometry({
+        ico: iconBytes(ICON_FILES.ico),
+        touch: png(180, draw(180, mark, { canvas: ICON_CANVAS })),
+      }), /home-screen icon apple-touch-icon\.png: the corner's alpha is 0 where the ground's squared corner makes it 255/],
+      ['a frame whose entry lies about the size of its bitmap', () => {
+        const bytes = Buffer.from(iconBytes(ICON_FILES.ico));
+        bytes[6] = 32;
+        return checks.assertIconsMatchIntendedGeometry({ ico: bytes, touch: iconBytes(ICON_FILES.touch) });
+      }, /Frame 0 of the \.ico is listed as 32px and holds a 16x16 bitmap/],
     ],
   },
   {

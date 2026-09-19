@@ -9,7 +9,9 @@
     "check": "node src/build.js --check",
     "test": "node scripts/test.js",
     "social": "python3 scripts/social-preview.py",
-    "photos": "python3 scripts/photos.py",
+    "photos": "python3 scripts/photos.py && python3 scripts/verify-photos.py",
+    "photos:verify": "python3 scripts/verify-photos.py",
+    "icons:verify": "python3 scripts/verify-icons.py",
     "stage": "node scripts/stage.js",
     "hooks:install": "node scripts/install-hooks.js",
     "prepare": "node scripts/install-hooks.js"

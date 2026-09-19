@@ -10,6 +10,9 @@ _site/
 # Fonts fetched and digest-checked by scripts/social-preview.py. Not part of the site.
 .cache/
 
+# Bytecode from the tools that import each other (scripts/photos.py, not part of the site).
+__pycache__/
+
 # Logs.
 *.log
 npm-debug.log*

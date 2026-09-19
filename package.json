@@ -10,6 +10,7 @@
     "test": "node scripts/test.js",
     "social": "python3 scripts/social-preview.py",
     "photos": "python3 scripts/photos.py",
+    "favicon": "node scripts/favicon.js",
     "stage": "node scripts/stage.js",
     "hooks:install": "node scripts/install-hooks.js",
     "prepare": "node scripts/install-hooks.js"

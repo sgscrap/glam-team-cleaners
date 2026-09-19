@@ -14,6 +14,7 @@ sitemap.xml text eol=lf
 robots.txt text eol=lf
 script.js text eol=lf
 src/** text eol=lf
+assets/favicon.svg text eol=lf
 scripts/** text eol=lf
 .githooks/** text eol=lf
 .github/** text eol=lf

@@ -23,9 +23,13 @@ export const site = {
    * Absolute, no trailing slash — the base for the canonical link, the Open Graph URL,
    * the sitemap's <loc>, and the structured-data @id. This is the address the site is
    * actually served from, so crawlers are never pointed at a domain that is not serving
-   * the page. Change this one value when the site moves to its own domain.
+   * the page.
+   *
+   * The business's own domain, not the GitHub Pages address the site was built on: that
+   * gh.io URL now 301s here, so naming it would advertise a redirect instead of the site.
+   * `assertRetiredHostsAbsent` in checks.js fails the build if it comes back.
    */
-  url: 'https://sgscrap.github.io/glam-team-cleaners',
+  url: 'https://glamcleaners.net',
   /**
    * The image a share of this site shows: a card set in the brand's own type and palette
    * beside Emely's portrait, rather than a stock photograph, so a link to the site looks

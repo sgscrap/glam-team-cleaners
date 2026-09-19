@@ -394,6 +394,40 @@ export function assertFaqMatchesPage(html, faqRecord) {
   return structuredQuestions.length;
 }
 
+/* --- the address the site answers on ------------------------------------ */
+
+/**
+ * Hosts this site used to be published from. Nothing published may name one.
+ *
+ * The list is spelled out here rather than derived from `site.url`, which is the whole point:
+ * the rule has to still hold in the commit that would otherwise put the old address back. A
+ * self-reference to a retired host is worse than a broken link — the host still resolves and
+ * still serves this page, via a redirect, so the mistake is invisible in a browser and is found
+ * by a search engine instead.
+ */
+export const RETIRED_HOSTS = ['sgscrap.github.io'];
+
+/**
+ * Every file a crawler reads, checked for a retired host. `assertPublishedUrlsAgree` below only
+ * inspects the one line in each file that holds the canonical URL; this reads the whole file, so
+ * a stale host in the share card's absolute URL, or anywhere else the page names itself, is
+ * caught too rather than only the three places that are already compared to `site.url`.
+ */
+export function assertRetiredHostsAbsent({ html, sitemap, robots }) {
+  const stale = [
+    ['index.html', html],
+    [SITEMAP_FILE, sitemap],
+    [ROBOTS_FILE, robots],
+  ]
+    .filter(([, text]) => RETIRED_HOSTS.some(host => text.includes(host)))
+    .map(([file]) => file);
+  if (stale.length) {
+    throw new Error(
+      `Published files still name a retired host (${RETIRED_HOSTS.join(', ')}): ${stale.join(', ')}`,
+    );
+  }
+}
+
 /* --- the files published to crawlers ------------------------------------ */
 
 /**

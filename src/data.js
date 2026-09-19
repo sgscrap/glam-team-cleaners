@@ -40,7 +40,7 @@ export const site = {
   announcement: 'Thoughtful cleaning for the spaces you call home',
   founded,
   est: `GTC / EST. ${founded}`,
-  phone: { label: '(555) 014-7826', href: 'tel:+15550147826' },
+  phone: { label: '(667) 487-0858', href: 'tel:+16674870858' },
   email: 'hello@glamteamcleaners.com',
   instagram: 'https://www.instagram.com/immaculatenesss/',
   year: 2024,
@@ -112,14 +112,21 @@ export const hero = {
   secondary: { label: 'View our work', href: '#work' },
   rating: { stars: '★★★★★', value: '4.9 / 5', note: 'average client rating' },
   /**
-   * Emely, not a room. The alt describes the photograph that is actually there — a portrait of
-   * a Glam Team cleaner — so the image and its description support the same claim.
+   * Emely, not a room. `master` is the original in photos/; the page loads a generated ladder of
+   * WebP widths from it, and `sizes` mirrors the CSS box it fills (.hero-art) so the browser can
+   * choose a candidate. The alt describes the photograph that is actually there.
    */
   image: {
-    src: 'assets/emely/emely-02.png',
+    master: 'photos/emely/emely-02.png',
     alt: 'Emely, a Glam Team Cleaner, standing beside an ornate window',
     width: 383,
     height: 590,
+    /** Measured in a browser against .hero-art, not derived from it: 84vw on a phone (83.6vw
+        measured), a box capped at 580px from 621px to 1000px, and the 0.88fr hero column above
+        that (36.5vw). The previous 92vw was an upper bound rather than a measurement, which is
+        harmless while this 383px master is the widest candidate and would over-fetch by more
+        than half as soon as a larger one exists. */
+    sizes: '(max-width: 620px) 84vw, (max-width: 1000px) 580px, 37vw',
   },
   card: { index: '01', lead: 'Spaces that', accent: 'feel like you.', note: 'Residential · Commercial' },
 };
@@ -248,10 +255,13 @@ export const gallery = {
   /**
    * A portfolio entry is a photograph of a job this business did, or nothing at all.
    *
-   * `photo` is the slot. Point it at a file this site ships, carrying that file's real width
-   * and height, and the cell becomes the picture. While it is null the entry renders as a
-   * typographic panel — the section stands on its own structure instead of on a photograph of
-   * somebody else's house. Nothing here may name an image the business does not own.
+   * `photo` is the slot, taking the same shape as every other photograph on the page: a `master`
+   * original in photos/, that file's real width and height, alt text describing the job, and a
+   * `sizes` hint for the cell it fills. The same pipeline generates what the page loads, so an
+   * entry that is filled in gains a WebP ladder like any other photograph. While it is null the
+   * entry renders as a typographic panel — the section stands on its own structure instead of on
+   * a photograph of somebody else's house. Nothing here may name an image the business does not
+   * own.
    */
   items: [
     { tag: 'Residential', caption: 'Soft, serene, spotless.', size: 'large', photo: null },
@@ -271,10 +281,18 @@ export const team = {
   roleNote: 'Detail enthusiast',
   link: { label: 'Follow Emely', href: site.instagram },
   portrait: {
-    src: 'assets/emely/emely-01.png',
+    master: 'photos/emely/emely-01.png',
     alt: 'Emely wearing a black top and pink statement accessories',
-    width: 640,
-    height: 960,
+    /** 587x837 is the file's real size. The attributes used to claim 640x960, which is not a
+        shape this photograph has ever had, so the page reserved the wrong box for it. */
+    width: 587,
+    height: 837,
+    /** The width the browser must plan for, measured rather than assumed: below 1000px the box
+        stretches to 560px and on a phone to the 89vw column, but on a wide screen .team-portrait's
+        `margin-left: auto` stops the grid stretching it, so it is sized by its 480px height and
+        this photograph's aspect ratio — 337px. Guessing 460px here made the browser fetch the
+        480px derivative for a 337px box. */
+    sizes: '(max-width: 620px) 89vw, (max-width: 1000px) 560px, 337px',
     label: 'EMELY',
     note: 'GLAM TEAM',
   },

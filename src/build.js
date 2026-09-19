@@ -5,6 +5,7 @@ import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
+import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
   RUNTIME_KEYS,
   assertBookingOptionsMatch,
@@ -15,6 +16,7 @@ import {
   assertHtmlIsWellFormed,
   assertImagesAreLocal,
   assertKnownIcons,
+  assertPhotographsWithinBudget,
   assertPublishedUrlsAgree,
   assertRecordPresent,
   assertReferencesShip,
@@ -161,7 +163,18 @@ console.log(`published set  ${shipped.size} files — ${referenceCount} referenc
 
 // What the page is allowed to show. A photograph the business does not own is not decoration
 // here: it stands in for work under a caption claiming that work was done.
-console.log(`photographs  ${assertImagesAreLocal(artifacts['index.html'])} in the page, all served from this site`);
+const pagePhotographs = assertImagesAreLocal(artifacts['index.html']);
+
+// And what those photographs cost. Every derivative is measured, including the alternatives only
+// srcset names, because those are files a real browser downloads. Safe to stat: a derivative
+// missing from disk is a reference that does not ship, which the guard above has already thrown
+// on by name rather than as an unexplained ENOENT here.
+const servedVariants = servedPhotographs().map(({ path }) => ({ path, bytes: statSync(path).size }));
+const heaviest = assertPhotographsWithinBudget(servedVariants, MAX_BYTES);
+console.log(`photographs  ${pagePhotographs} in the page from ${photographs().length} masters, ${servedVariants.length} derivatives — heaviest ${heaviest.path} ${Math.round(heaviest.bytes / 1024)} KB of ${MAX_BYTES / 1024} KB`);
+
+const unused = unusedMasters();
+console.log(`masters  ${photographs().length} in use${unused.length ? `, ${unused.length} not on the page: ${unused.join(', ')}` : ', all in use'}`);
 
 if (checkOnly) {
   const readIfPresent = name => {

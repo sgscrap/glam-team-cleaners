@@ -1,5 +1,6 @@
 import { site, business, hero, services, footer, openingHours, faqs } from './data.js';
 import { esc, jsonBlock, GENERATED_NOTE } from './html.js';
+import { largestPath } from './photos.js';
 
 const pageUrl = `${site.url}/`;
 
@@ -36,7 +37,7 @@ export const structuredData = () => ({
   url: pageUrl,
   telephone: site.phone.href.replace(/^tel:/, ''),
   email: site.email,
-  image: `${site.url}/${hero.image.src}`,
+  image: `${site.url}/${largestPath(hero.image)}`,
   slogan: site.tagline,
   foundingDate: String(site.founded),
   areaServed: footer.area.join(' '),

@@ -142,16 +142,22 @@ export function assertHtmlIsWellFormed(html) {
  * the two asked the question differently, a file could be called dead weight by one and in
  * use by the other.
  *
- * Three kinds of reference count. `src`/`href` in the page, `url()` in the stylesheet, and
- * meta content naming this site — because the share card lives in an absolute URL in a meta
- * tag and is fetched by no browser request at all, so a scan that read only `src`/`href`
- * would report the site's own social preview as a file nothing uses.
+ * Four kinds of reference count. `src`/`href` in the page, every candidate in a `srcset` — a
+ * photograph is referenced through its widest candidate in `src` and its alternatives only in
+ * `srcset`, so a scan that read the first would call every smaller derivative dead weight and
+ * miss one that had been deleted — `url()` in the stylesheet, and meta content naming this site,
+ * because the share card lives in an absolute URL in a meta tag and is fetched by no browser
+ * request at all, so a scan that read only `src`/`href` would report the site's own social
+ * preview as a file nothing uses.
  */
 export function referencedFiles({ html, css = '' }, site) {
   const underSite = `${site.url}/`;
   const asPath = value => (value.startsWith(underSite) ? value.slice(underSite.length) : value);
   const values = [
     ...[...html.matchAll(/(?:src|href)="([^"]*)"/g)].map(([, value]) => value),
+    // `path 480w, path 960w` — the width descriptor is not part of the reference.
+    ...[...html.matchAll(/srcset="([^"]*)"/g)].flatMap(([, list]) =>
+      list.split(',').map(candidate => candidate.trim().split(/\s+/)[0])),
     ...[...html.matchAll(/content="([^"]*)"/g)]
       .map(([, value]) => value)
       .filter(value => value.startsWith(underSite)),
@@ -424,6 +430,31 @@ export function assertPublishedUrlsAgree({ html, sitemap, robots }, site) {
     throw new Error(`Unexpected URLs published to crawlers: ${extra
       .map(([file, urls]) => `${file} (${urls.join(', ')})`).join('; ')}`);
   }
+}
+
+/* --- what the page costs to load ---------------------------------------- */
+
+/**
+ * Every photograph the page serves, against its weight budget.
+ *
+ * A photograph is the heaviest thing on a page and the easiest to make heavy by accident: skip
+ * one run of the generator, or drop an original in at full resolution, and the page is still
+ * *correct* and simply pays for it. Nothing else here would notice, because nothing else is
+ * about bytes — every other guard asks whether the right thing is there, not what it costs.
+ *
+ * Takes `[{ path, bytes }]`: what was found, not where to look for it, so it can be called on a
+ * crafted list. Returns the heaviest, so the build can report the margin it is keeping.
+ */
+export function assertPhotographsWithinBudget(photographs, maxBytes) {
+  const over = photographs
+    .filter(({ bytes }) => bytes > maxBytes)
+    .sort((first, second) => second.bytes - first.bytes);
+  if (over.length) {
+    throw new Error(`Photographs over the ${Math.round(maxBytes / 1024)} KB budget: ${over
+      .map(({ path, bytes }) => `${path} (${Math.round(bytes / 1024)} KB)`)
+      .join(', ')} — regenerate with npm run photos, or drop a step from the ladder`);
+  }
+  return photographs.reduce((heaviest, photo) => (photo.bytes > heaviest.bytes ? photo : heaviest), { path: 'none', bytes: 0 });
 }
 
 /* --- the gate the work has to pass through ------------------------------- */

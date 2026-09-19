@@ -19,7 +19,7 @@
  * real one — so the largest candidate is the master's own width, and a photograph too small for
  * the box it fills is reported rather than padded.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { gallery, hero, team } from './data.js';
 
 /** The two directories, related in exactly one place. */
@@ -85,9 +85,11 @@ export const largestPath = photo => derivativePath(photo.master, derivativeWidth
 export const srcset = photo =>
   derivativeWidths(photo).map(width => `${derivativePath(photo.master, width)} ${width}w`).join(', ');
 
-/** Every derivative the site serves, for the ship-set and weight guards to walk. */
+/** Every derivative the site serves, for the ship-set, weight and geometry guards to walk. The
+    master comes along so a guard can measure a derivative against the photograph it came from
+    without taking its file name apart. */
 export const servedPhotographs = () => photographs().flatMap(photo =>
-  derivativeWidths(photo).map(width => ({ path: derivativePath(photo.master, width), width })));
+  derivativeWidths(photo).map(width => ({ path: derivativePath(photo.master, width), width, master: photo.master })));
 
 /** Every file under a directory, as site-root-relative paths, so nested masters are covered. */
 const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry =>
@@ -104,6 +106,93 @@ export const unusedMasters = () => {
   if (!existsSync(MASTER_DIRECTORY)) return [];
   const used = new Set(photographs().map(photo => photo.master));
   return walk(MASTER_DIRECTORY).filter(file => !used.has(file));
+};
+
+/* --- reading a published file back --------------------------------------- */
+
+/** The bytes of a file that has to be there, so a missing one fails by name rather than as ENOENT. */
+const bytesOf = path => {
+  if (!existsSync(path)) {
+    throw new Error(`${path} is named by the pipeline and is not on disk, so nothing about it can be measured`);
+  }
+  return readFileSync(path);
+};
+
+/**
+ * A master's real pixel size, from the PNG header — which is the whole of the file that has to be
+ * read for it, and deliberately not the decoder in src/raster.js: that one is the inverse of what
+ * this project writes, and a master is somebody else's file in whatever shape it came in.
+ */
+export const masterSize = path => {
+  const header = bytesOf(path).subarray(0, 24);
+  if (header.toString('latin1', 1, 4) !== 'PNG') {
+    throw new Error(`${path} is not a PNG, and a master is expected to be one`);
+  }
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+};
+
+/**
+ * What a published WebP says it is, read from its container.
+ *
+ * Nothing here decodes the image: the pixels are compressed with VP8, which is not a format this
+ * project can afford to implement and not one it should install a library to read. What the
+ * container does carry is enough to catch a photograph pipeline going wrong — the canvas the
+ * frames are in, whether there is an alpha channel, and whether the file is even a WebP. A
+ * derivative that is the wrong size, the wrong shape or carrying an alpha channel the pipeline
+ * never made is a file no eye would catch in a page of photographs.
+ *
+ * Three container shapes, as the format defines them: a bare lossy or lossless frame, and the
+ * extended one that announces its features up front and holds the frame after them.
+ */
+export const readWebp = path => {
+  const bytes = bytesOf(path);
+  if (bytes.toString('latin1', 0, 4) !== 'RIFF' || bytes.toString('latin1', 8, 12) !== 'WEBP') {
+    throw new Error(`${path} is not a WebP: it begins ${JSON.stringify(bytes.toString('latin1', 0, 12))}`);
+  }
+
+  const chunks = [];
+  for (let at = 12; at + 8 <= bytes.length;) {
+    const type = bytes.toString('latin1', at, at + 4);
+    const length = bytes.readUInt32LE(at + 4);
+    chunks.push({ type, at: at + 8, length });
+    at += 8 + length + (length % 2);   // chunks are padded to an even length
+  }
+
+  const chunk = type => chunks.find(entry => entry.type === type);
+  const frame = chunk('VP8 ') ?? chunk('VP8L');
+  const canvas = chunk('VP8X');
+  if (!frame && !canvas) {
+    throw new Error(`${path} holds no image: its chunks are ${chunks.map(({ type }) => type).join(', ') || 'none'}`);
+  }
+
+  let size;
+  let alpha = Boolean(chunk('ALPH'));
+  if (frame?.type === 'VP8 ') {
+    // A 3-byte frame tag, the 3-byte start code, then 14 bits of width and 14 of height.
+    const payload = bytes.subarray(frame.at, frame.at + frame.length);
+    if (!(payload[3] === 0x9d && payload[4] === 0x01 && payload[5] === 0x2a)) {
+      throw new Error(`${path} starts its VP8 frame with something other than a key frame's start code`);
+    }
+    const packed = payload.readUInt32LE(6);
+    size = { width: packed & 0x3fff, height: (packed >> 16) & 0x3fff };
+  } else if (frame?.type === 'VP8L') {
+    const payload = bytes.subarray(frame.at, frame.at + frame.length);
+    if (payload[0] !== 0x2f) throw new Error(`${path} starts its VP8L frame with something other than its signature byte`);
+    const bits = payload.readUInt32LE(1);
+    size = { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+    alpha = alpha || Boolean((bits >> 28) & 1);
+  } else {
+    // VP8X states the canvas the frames live in, one less than the size, in three bytes each.
+    size = { width: bytes.readUIntLE(canvas.at + 4, 3) + 1, height: bytes.readUIntLE(canvas.at + 7, 3) + 1 };
+  }
+
+  return {
+    container: frame ? frame.type.trim() : 'VP8X',
+    ...size,
+    alpha,
+    animated: Boolean(chunk('ANIM')),
+    chunks: chunks.map(({ type }) => type.trim()),
+  };
 };
 
 /**

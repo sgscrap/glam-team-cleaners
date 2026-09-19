@@ -5,7 +5,7 @@ import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
-import { FAVICON_FILE, readPalette } from './favicon.js';
+import { ICON_LINKS, iconFiles } from './favicon.js';
 import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
   RUNTIME_KEYS,
@@ -14,9 +14,8 @@ import {
   assertE164Phone,
   assertEmbeddedJsonParses,
   assertFaqMatchesPage,
-  assertFaviconDeclared,
-  assertFaviconMatchesPalette,
   assertHtmlIsWellFormed,
+  assertIconsDeclared,
   assertImagesAreLocal,
   assertKnownIcons,
   assertPhotographsWithinBudget,
@@ -140,6 +139,10 @@ const artifacts = {
   'styles.css': buildStyles(),
   [seo.SITEMAP_FILE]: seo.sitemap(),
   [seo.ROBOTS_FILE]: seo.robots(),
+  // The icons are generated here rather than by a script of their own, so the check below covers
+  // them like every other generated file: a committed icon that no longer matches the stylesheet
+  // tokens is stale output, not a judgement call.
+  ...iconFiles(),
 };
 
 assertPublishedUrlsAgree({
@@ -173,13 +176,11 @@ const publishedSummary = unreferenced.length
   : 'every file referenced';
 console.log(`published set  ${shipped.size} files — ${referenceCount} references, all ship; ${publishedSummary}`);
 
-// The favicon, both halves of it, and neither is visible: a page that declares no icon sends
-// every browser to /favicon.ico and that 404s, and an icon the stylesheet has moved on from
-// repaints the site while the tab keeps the old colours. The file is safe to read because a
-// missing one is a reference that does not ship, which the guard above reported by name.
-assertFaviconDeclared(artifacts['index.html'], FAVICON_FILE);
-const faviconColors = assertFaviconMatchesPalette(readFileSync(FAVICON_FILE, 'utf8'), readPalette());
-console.log(`favicon  ${FAVICON_FILE} declared on the page, on palette (${faviconColors} colours)`);
+// The icons the page declares, checked against the paths just published. Both directions matter:
+// an icon nothing declares is a file a client will never ask for by that name, and a declaration
+// naming a path that is not published sends it to the /favicon.ico fallback instead.
+const declaredIcons = assertIconsDeclared(artifacts['index.html'], ICON_LINKS);
+console.log(`icons  ${declaredIcons} declared and published: ${ICON_LINKS.map(({ href }) => href).join(', ')}`);
 
 // What the page is allowed to show. A photograph the business does not own is not decoration
 // here: it stands in for work under a caption claiming that work was done.
@@ -199,12 +200,18 @@ console.log(`masters  ${photographs().length} in use${unused.length ? `, ${unuse
 if (checkOnly) {
   const readIfPresent = name => {
     try {
-      return readFileSync(name, 'utf8');
+      return readFileSync(name);
     } catch {
       return null;
     }
   };
-  const stale = Object.entries(artifacts).filter(([name, content]) => readIfPresent(name) !== content);
+  // Compared as bytes, because the icons are buffers while the page and the stylesheet are text —
+  // one comparison then covers both, with no second code path to keep in step.
+  const asBytes = content => (Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8'));
+  const stale = Object.entries(artifacts).filter(([name, content]) => {
+    const published = readIfPresent(name);
+    return published === null || !published.equals(asBytes(content));
+  });
   if (stale.length) {
     // The fix command is built from the artifact list, so it cannot drift as files are added.
     const names = stale.map(([name]) => name).join(' ');

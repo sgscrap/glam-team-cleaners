@@ -23,7 +23,7 @@ import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
 import { MAX_BYTES, servedPhotographs } from '../src/photos.js';
-import { FAVICON_FILE, FAVICON_TOKENS, readPalette } from '../src/favicon.js';
+import { ICON_FILES, ICON_LINKS } from '../src/favicon.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -42,10 +42,6 @@ const pageUrl = `${site.url}/`;
  * agree with it, which is the shape of test that lets a rule quietly stop ruling.
  */
 const retiredHost = 'https://sgscrap.github.io';
-
-/** The icon as it is published, and the tokens it is generated from. */
-const palette = readPalette();
-const favicon = read(FAVICON_FILE);
 
 /**
  * A PNG with one text chunk and nothing else, so the reader can be exercised on structures the
@@ -439,24 +435,14 @@ const CASES = [
     ],
   },
   {
-    guard: 'assertFaviconDeclared',
+    guard: 'assertIconsDeclared',
     accepts: [
-      { why: 'the real page', run: () => checks.assertFaviconDeclared(indexHtml, FAVICON_FILE), expect: href => assert.equal(href, FAVICON_FILE) },
+      { why: 'the real page', run: () => checks.assertIconsDeclared(indexHtml, ICON_LINKS), expect: count => assert.equal(count, ICON_LINKS.length) },
     ],
     rejects: [
-      ['a page whose head lost the icon link', () => checks.assertFaviconDeclared(indexHtml.replace(`<link rel="icon" href="${FAVICON_FILE}" type="image/svg+xml" sizes="any">`, ''), FAVICON_FILE), /declares no <link rel="icon">/],
-      ['a page declaring an icon somewhere else', () => checks.assertFaviconDeclared(indexHtml.replace(FAVICON_FILE, 'assets/old-icon.png'), FAVICON_FILE), /declares an icon at assets\/old-icon\.png/],
-    ],
-  },
-  {
-    guard: 'assertFaviconMatchesPalette',
-    accepts: [
-      { why: 'the committed icon against the stylesheet tokens', run: () => checks.assertFaviconMatchesPalette(favicon, palette), expect: count => assert.equal(count, FAVICON_TOKENS.length) },
-    ],
-    rejects: [
-      ['an icon drawn without one of the palette colours', () => checks.assertFaviconMatchesPalette(favicon.replaceAll(palette.rose, palette.ivory), palette), new RegExp(`drawn without ${palette.rose}`)],
-      ['an icon carrying a colour the stylesheet does not use', () => checks.assertFaviconMatchesPalette(favicon.replace(palette.espresso, '#ff0000'), palette), /off-palette #ff0000/],
-      ['a token that moved out from under the icon', () => checks.assertFaviconMatchesPalette(favicon, { ...palette, rose: '#123456' }), /drawn without #123456/],
+      ['a page declaring no icons at all', () => checks.assertIconsDeclared(indexHtml.replace(/<link rel="(icon|apple-touch-icon)"[^>]*>\n/g, ''), ICON_LINKS), /does not declare icon at favicon\.ico/],
+      ['a page whose icon points somewhere else', () => checks.assertIconsDeclared(indexHtml.replace(`href="${ICON_FILES.svg}"`, 'href="assets/old-icon.svg"'), ICON_LINKS), /does not declare icon at assets\/favicon\.svg/],
+      ['the right path declared under the wrong rel', () => checks.assertIconsDeclared(indexHtml.replace('rel="apple-touch-icon"', 'rel="mask-icon"'), ICON_LINKS), /does not declare apple-touch-icon at apple-touch-icon\.png/],
     ],
   },
 ];

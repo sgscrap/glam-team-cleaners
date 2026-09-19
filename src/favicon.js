@@ -195,6 +195,121 @@ const shapeSvg = ({ fill, class: kind, x, y, width, height, top, base }) => {
 };
 
 /**
+ * The shapes a published vector icon describes, read back out of its markup.
+ *
+ * The inverse of `shapeSvg`, and strict in the way the raster readers are: it knows the two element
+ * forms this project writes and the exact command sequence behind a bar, and refuses anything else
+ * rather than guessing at what a browser might make of it.
+ *
+ * What it recovers are the fields `markShapes` works in, so a guard can compare the markup with the
+ * mark itself. The part that makes this a measurement rather than a restatement of the code that
+ * wrote it: most of those numbers are implied by two or three different commands — the right edge
+ * by the first arc's end and by where the second arc starts, the base line by two arcs and a `V`, a
+ * bar's width by a horizontal run and a pair of radii — and every one of them is checked to agree
+ * in all of them before it is used.
+ */
+export const readVectorShapes = (svg, label = 'the vector icon') => {
+  const attribute = (text, name) => new RegExp(`\\b${name}="([^"]*)"`).exec(text)?.[1] ?? null;
+
+  return [...svg.matchAll(/<(rect|path)([^>]*)\/>/g)].map(([, kind, attributes], index) => {
+    const shape = `shape ${index + 1} of ${label}`;
+    const fail = reason => {
+      throw new Error(`${shape} is not something this project draws: ${reason}`);
+    };
+    const number = (text, what) => {
+      const parsed = Number(text);
+      if (text === null || !Number.isFinite(parsed)) fail(`its ${what} is ${text === null ? 'missing' : JSON.stringify(text)}`);
+      return parsed;
+    };
+
+    const fill = attribute(attributes, 'fill');
+    if (!fill) fail('it has no fill');
+
+    if (kind === 'rect') {
+      // One radius for four corners, which is why only the ground — whose top and base are the
+      // same — can be written as a rectangle at all.
+      const radius = attribute(attributes, 'rx');
+      const corner = radius === null ? 0 : number(radius, 'rx');
+      return {
+        kind,
+        fill: fill.toLowerCase(),
+        x: number(attribute(attributes, 'x'), 'x'),
+        y: number(attribute(attributes, 'y'), 'y'),
+        width: number(attribute(attributes, 'width'), 'width'),
+        height: number(attribute(attributes, 'height'), 'height'),
+        top: corner,
+        base: corner,
+      };
+    }
+
+    const commands = [...(attribute(attributes, 'd') ?? '').matchAll(/([MHVAz])([^MHVAz]*)/g)]
+      .map(([, command, args]) => ({
+        command,
+        args: args.trim().split(/[\s,]+/).filter(Boolean).map(Number),
+      }));
+    const letters = commands.map(({ command }) => command).join('');
+    const straightAcross = letters === 'MHAVAHAVAz';
+    if (!straightAcross && letters !== 'MAVAHAVAz') {
+      fail(`its path is ${letters}, where a bar is M A V A H A V A z with an H before the first arc when the top edge is long enough to have a straight part`);
+    }
+
+    const arc = ({ args }, what) => {
+      const [rx, ry, rotation, large, sweep, ax, ay] = args;
+      if (args.length !== 7 || args.some(value => !Number.isFinite(value)) || rx !== ry || rotation !== 0 || large !== 0 || sweep !== 1) {
+        fail(`the ${what} is ${args.join(' ')}, where a bar's corner is A r r 0 0 1 x y`);
+      }
+      return { radius: rx, at: [ax, ay] };
+    };
+
+    if (commands.length !== (straightAcross ? 10 : 9)) fail(`its path has ${commands.length} commands`);
+
+    // M, the optional H across the top, then the seven commands a bar's outline is made of, then z.
+    const start = commands[0];
+    const [leading] = straightAcross ? [commands[1]] : [null];
+    const [first, toBase, lower, across, lowerBack, up, last] = commands.slice(straightAcross ? 2 : 1);
+
+    const top = arc(first, 'first arc');
+    const base = arc(lower, 'second arc');
+    const baseBack = arc(lowerBack, 'third arc');
+    const topBack = arc(last, 'last arc');
+    if (top.radius !== topBack.radius || base.radius !== baseBack.radius) {
+      fail(`its corners are rounded by four different radii: ${[top, base, baseBack, topBack].map(corner => corner.radius).join(', ')}`);
+    }
+
+    // The four corners read off the four arcs: the bar's box is the space they enclose, and each
+    // edge of it is named by two of them, or by an arc and the run that meets it.
+    const [startX, startY] = start.args;
+    const [right, topLine] = top.at;
+    const [baseRight, bottom] = base.at;
+    const [baseLeft, baseLine] = baseBack.at;
+    const [left, endY] = topBack.at;
+
+    if (start.command !== 'M' || start.args.length !== 2 || commands.at(-1).command !== 'z') fail('its path does not begin with M and end with z');
+    if (left !== startX || endY !== startY) fail('its path does not close back onto its first point');
+    if (right !== baseRight + base.radius) fail(`the right edge is at ${right} where the first arc ends and ${baseRight + base.radius} where the second begins`);
+    if (topLine !== startY + top.radius) fail(`the first arc ends at ${topLine}, not one radius below the top edge at ${startY + top.radius}`);
+    if (bottom !== baseLine + base.radius) fail(`the base arc drops to ${bottom}, not one radius below the run that meets it at ${baseLine + base.radius}`);
+    if (toBase.args[0] !== baseLine) fail(`the run down the right side ends at ${toBase.args[0]} where the base arc begins at ${baseLine}`);
+    if (up.args[0] !== topLine) fail(`the run up the left side ends at ${up.args[0]} where the first arc ends at ${topLine}`);
+    if (across.args[0] !== baseLeft + base.radius) fail(`the run across the base ends at ${across.args[0]}, not one radius in from the left edge at ${baseLeft + base.radius}`);
+    if (straightAcross !== right - top.radius > baseLeft + top.radius) fail('the straight part of the top edge is there when the corners meet, and missing when they do not');
+    if (leading && leading.args[0] !== right - top.radius) fail(`the run across the top ends at ${leading.args[0]} where the first arc begins at ${right - top.radius}`);
+    if (Math.round(startX) !== Math.round(baseLeft + top.radius)) fail(`the path starts at ${startX} where the left edge plus its top radius is ${baseLeft + top.radius}`);
+
+    return {
+      kind,
+      fill: fill.toLowerCase(),
+      x: baseLeft,
+      y: endY,
+      width: right - baseLeft,
+      height: bottom - endY,
+      top: top.radius,
+      base: base.radius,
+    };
+  });
+};
+
+/**
  * The vector icon: the mark's own shape, which is what a modern browser prefers to a raster.
  *
  * It is the only icon that can follow the browser's colour scheme — the `favicon.ico` and the

@@ -18,6 +18,7 @@ import {
   assertFaviconAdaptsToDarkScheme,
   assertIconsDeclared,
   assertIconsMatchIntendedGeometry,
+  assertVectorIconMatchesTheMark,
   assertIconsMatchBrandMark,
   assertImagesAreLocal,
   assertKnownIcons,
@@ -195,6 +196,12 @@ console.log(`dark scheme  ${schemeRules} rule in ${ICON_FILES.svg}: the ground s
 // And what the rasters contain, read back out of the files rather than taken from the encoder that
 // wrote them: the drift check can only hold them to src/, which would carry a drawing bug just as
 // happily as the correct mark.
+// And what the vector icon says, read out of the markup a browser renders rather than compared with
+// the builder that wrote it: the rasters below are drawn from markShapes, so a bug in the path the
+// SVG describes is the one thing on the page a screenshot of the rasters cannot contradict.
+const measuredShapes = assertVectorIconMatchesTheMark(artifacts[ICON_FILES.svg]);
+console.log(`vector icon  ${measuredShapes} shapes in ${ICON_FILES.svg} measured against the mark: every box, both corner radii, every colour`);
+
 const measuredFrames = assertIconsMatchIntendedGeometry({
   ico: artifacts[ICON_FILES.ico],
   touch: artifacts[ICON_FILES.touch],

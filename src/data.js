@@ -40,7 +40,7 @@ export const site = {
   announcement: 'Thoughtful cleaning for the spaces you call home',
   founded,
   est: `GTC / EST. ${founded}`,
-  phone: { label: '(555) 014-7826', href: 'tel:+15550147826' },
+  phone: { label: '(667) 487-0858', href: 'tel:+16674870858' },
   email: 'hello@glamteamcleaners.com',
   instagram: 'https://www.instagram.com/immaculatenesss/',
   year: 2024,

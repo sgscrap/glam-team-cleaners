@@ -283,6 +283,10 @@ const px = value => (/^[\d.]+px$/.test(value ?? '') ? Number.parseFloat(value) :
  * import each other. The guard reads the mark out of the stylesheet that draws it and compares
  * every value the icons are generated from, because getting this wrong is invisible: reshape the
  * header and it still looks right, while the tab quietly keeps the proportions it used to have.
+ *
+ * The last value is the ground's corner, which is the one shape with no drawing in the stylesheet
+ * and so the one the icons could have kept to themselves: `.brand-mark` declares it as a share of
+ * the box, and the guard holds the icons to that share rather than to a number of its own.
  */
 export function assertIconsMatchBrandMark(css, mark) {
   const box = ruleBody(css, '.brand-mark');
@@ -294,6 +298,13 @@ export function assertIconsMatchBrandMark(css, mark) {
     .map(([what]) => what);
   if (missing.length) {
     throw new Error(`The icons are drawn from the header's brand mark, and ${BRAND_MARK_STYLESHEET} no longer declares ${missing.join(', ')}`);
+  }
+
+  // A share and not a length: the same icon is drawn from a 16px tab to a 180px home screen, and a
+  // corner that is right at one end of that range is wrong at the other.
+  const share = /^([\d.]+)%$/.exec(box['--icon-radius'] ?? '');
+  if (!share) {
+    throw new Error(`${BRAND_MARK_STYLESHEET} declares no --icon-radius as a percentage on .brand-mark, and the icons round their ground by it`);
   }
 
   const radii = bar['border-radius'].split(/\s+/);
@@ -313,6 +324,7 @@ export function assertIconsMatchBrandMark(css, mark) {
     ['the base radius', px(radius(1)), mark.baseRadius],
     ...bars.map((body, index) => [`the height of bar ${index + 1}`, px(body.height), mark.heights[index]]),
     ['which bar is rose', bars.findIndex(body => body.background === 'var(--rose)') + 1, mark.rose],
+    ['the ground corner, as a share of the mark box', Number.parseFloat(share[1]), mark.groundRadius],
   ];
   const differences = compared
     .filter(([, found, expected]) => found !== expected)

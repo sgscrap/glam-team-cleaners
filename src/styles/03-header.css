@@ -30,7 +30,12 @@
 }
 .brand em { font: 600 15px/1 var(--serif); letter-spacing: -0.08em; text-transform: none; }
 
-.brand-mark { display: flex; align-items: flex-end; gap: 2px; width: 28px; height: 28px; }
+/* --icon-radius is read by the build rather than by any rule here: it is the corner on the
+   favicon's ground, as a share of this box, so the icon's shape follows the mark instead of being
+   its own number. A share and not a length because the same icon is drawn from a 16px tab to a
+   180px home screen. src/favicon.js draws from it; assertIconsMatchBrandMark holds the two
+   together. */
+.brand-mark { display: flex; align-items: flex-end; gap: 2px; width: 28px; height: 28px; --icon-radius: 25%; }
 .brand-mark i { display: block; width: 7px; background: var(--espresso); border-radius: 5px 5px 1px 1px; }
 .brand-mark i:nth-child(1) { height: 14px; }
 .brand-mark i:nth-child(2) { height: 25px; background: var(--rose); }

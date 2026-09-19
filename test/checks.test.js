@@ -426,7 +426,7 @@ const CASES = [
   {
     guard: 'assertIconsMatchBrandMark',
     accepts: [
-      { why: 'the real stylesheet and the icons generated from it', run: () => checks.assertIconsMatchBrandMark(headerCss, BRAND_MARK), expect: count => assert.equal(count, 10) },
+      { why: 'the real stylesheet and the icons generated from it', run: () => checks.assertIconsMatchBrandMark(headerCss, BRAND_MARK), expect: count => assert.equal(count, 11) },
     ],
     rejects: [
       ['a bar whose height changed in the stylesheet', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(2) { height: 25px;', '.brand-mark i:nth-child(2) { height: 24px;'), BRAND_MARK), /the height of bar 2 is 24 in src\/styles\/03-header\.css and 25 in the icons/],
@@ -436,6 +436,9 @@ const CASES = [
       ['a height that is no longer a px value', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(1) { height: 14px; }', '.brand-mark i:nth-child(1) { height: 0.9rem; }'), BRAND_MARK), /the height of bar 1 is not a plain px value in/],
       ['a rule that has gone', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(3) { height: 19px; }\n', ''), BRAND_MARK), /no longer declares bar 3/],
       ['a border-radius the icons cannot mirror', () => checks.assertIconsMatchBrandMark(headerCss.replace('border-radius: 5px 5px 1px 1px;', 'border-radius: 5px 2px 1px;'), BRAND_MARK), /3-value shorthand/],
+      ['the ground corner rounded differently in the stylesheet', () => checks.assertIconsMatchBrandMark(headerCss.replace('--icon-radius: 25%;', '--icon-radius: 20%;'), BRAND_MARK), /the ground corner, as a share of the mark box is 20 in src\/styles\/03-header\.css and 25 in the icons/],
+      ['a ground corner that is no longer a share', () => checks.assertIconsMatchBrandMark(headerCss.replace('--icon-radius: 25%;', '--icon-radius: 14px;'), BRAND_MARK), /declares no --icon-radius as a percentage/],
+      ['a declaration that has gone', () => checks.assertIconsMatchBrandMark(headerCss.replace(' --icon-radius: 25%;', ''), BRAND_MARK), /declares no --icon-radius as a percentage on \.brand-mark/],
     ],
   },
   {

@@ -7,7 +7,7 @@
  * to be sitting inside.
  */
 import { FAQ_TYPE, ROBOTS_FILE, SITEMAP_FILE, sitemapUrl } from './seo.js';
-import { BRAND_MARK_STYLESHEET, GROUND_CLASS, ICON_CANVAS, ICON_FILES, markShapes, readPalette } from './favicon.js';
+import { BRAND_MARK_STYLESHEET, GROUND_CLASS, ICON_CANVAS, ICON_FILES, markShapes, readPalette, readVectorShapes } from './favicon.js';
 import { readIco, readPng } from './raster.js';
 import { ENTRY_FILES } from './ship.js';
 import { masterSize, readWebp } from './photos.js';
@@ -265,6 +265,42 @@ export function assertIconsDeclared(html, icons) {
     throw new Error(`The page does not declare ${missing.map(({ rel, href }) => `${rel} at ${href}`).join('; ')}: a client that finds no declaration asks for /favicon.ico at the site root instead, which shows up in nothing but a network panel`);
   }
   return icons.length;
+}
+
+/**
+ * The published vector icon, measured against the mark it describes.
+ *
+ * The drift check holds this file to `src/favicon.js` byte for byte, which is the same as holding
+ * it to the builder — so a path with the wrong arc in it is generated, committed and confirmed, and
+ * only a browser would ever disagree. `assertIconsMatchIntendedGeometry` does not see it either:
+ * that one measures the rasters, which are drawn from `markShapes` and never touch the markup.
+ *
+ * So this reads the file the way a renderer would — one shape per element, each recovered from the
+ * commands it is written as — and compares what it says with the mark: every box, both corner
+ * radii of every bar, and every colour, in the order they paint. The reader refuses markup that
+ * does not describe a shape at all, which is the other half of it: a path that contradicts itself
+ * about where its own corners are is not a mark with a wrong number in it, it is not a mark.
+ */
+export function assertVectorIconMatchesTheMark(svg, { shapes } = {}) {
+  const drawn = shapes ?? markShapes(readPalette());
+  const described = readVectorShapes(svg, ICON_FILES.svg);
+  const named = index => (index === 0 ? 'the ground' : `bar ${index}`);
+
+  if (described.length !== drawn.length) {
+    throw new Error(`${ICON_FILES.svg} describes ${described.length} shape(s) where the mark is ${drawn.length} — what a browser paints is what this file says, so a shape nobody meant to add is a shape on the tab`);
+  }
+
+  const compared = described.flatMap((shape, index) => [
+    ...['x', 'y', 'width', 'height', 'top', 'base'].map(field => [`the ${field === 'top' ? 'top radius' : field === 'base' ? 'base radius' : field} of ${named(index)}`, shape[field], drawn[index][field]]),
+    [`the colour of ${named(index)}`, shape.fill, drawn[index].fill.toLowerCase()],
+  ]);
+  const differences = compared
+    .filter(([, found, expected]) => found !== expected)
+    .map(([what, found, expected]) => `${what} is ${found} in ${ICON_FILES.svg} and ${expected} in the mark`);
+  if (differences.length) {
+    throw new Error(`The published vector icon and the mark have parted company: ${differences.join('; ')} — the rasters are measured elsewhere, and this is the file a browser actually draws`);
+  }
+  return described.length;
 }
 
 /**

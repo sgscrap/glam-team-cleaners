@@ -554,6 +554,35 @@ const CASES = [
     ],
   },
   {
+    guard: 'assertVectorIconMatchesTheMark',
+    accepts: [
+      { why: 'the published vector icon', run: () => checks.assertVectorIconMatchesTheMark(svgIcon), expect: count => assert.equal(count, 4) },
+    ],
+    rejects: [
+      ['a bar painted the ground’s colour', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('<path fill="#fcfaf6" d="M14 32', '<path fill="#2c1d20" d="M14 32'),
+      ), /the colour of bar 1 is #2c1d20 in assets\/favicon\.svg and #fcfaf6 in the mark/],
+      ['the ground rounded by a different radius', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('rx="14"', 'rx="8"'),
+      ), /the top radius of the ground is 8 in assets\/favicon\.svg and 14 in the mark/],
+      ['a ground that does not cover the canvas', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('width="64" height="64"', 'width="60" height="64"'),
+      ), /the width of the ground is 60 in assets\/favicon\.svg and 64 in the mark/],
+      ['a shape nobody asked for', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('</svg>', `${svgIcon.split('\n').filter(line => line.startsWith('<path')).at(-1)}\n</svg>`),
+      ), /describes 5 shape\(s\) where the mark is 4/],
+      ['a bar whose two top corners disagree about their radius', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('A7 7 0 0 1 21 39', 'A5 5 0 0 1 21 39'),
+      ), /its corners are rounded by four different radii: 5, 2, 2, 7/],
+      ['a path that contradicts itself about where its corner is', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('A7 7 0 0 1 21 39', 'A5 5 0 0 1 21 39').replace('A7 7 0 0 1 14 32z', 'A5 5 0 0 1 14 32z'),
+      ), /the first arc ends at 39, not one radius below the top edge at 37/],
+      ['a path with no closing command', () => checks.assertVectorIconMatchesTheMark(
+        svgIcon.replace('0 0 1 14 32z', '0 0 1 14 32'),
+      ), /its path is MAVAHAVA, where a bar is M A V A H A V A z/],
+    ],
+  },
+  {
     guard: 'assertIconsMatchIntendedGeometry',
     accepts: [
       {

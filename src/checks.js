@@ -7,6 +7,7 @@
  * to be sitting inside.
  */
 import { FAQ_TYPE, ROBOTS_FILE, SITEMAP_FILE, sitemapUrl } from './seo.js';
+import { BRAND_MARK_STYLESHEET } from './favicon.js';
 import { ENTRY_FILES } from './ship.js';
 import { esc } from './html.js';
 
@@ -262,6 +263,64 @@ export function assertIconsDeclared(html, icons) {
     throw new Error(`The page does not declare ${missing.map(({ rel, href }) => `${rel} at ${href}`).join('; ')}: a client that finds no declaration asks for /favicon.ico at the site root instead, which shows up in nothing but a network panel`);
   }
   return icons.length;
+}
+
+/** The declarations inside one rule block, or null when the stylesheet has no rule for that selector. */
+const ruleBody = (css, selector) => {
+  const body = between(css, `${selector} {`, '}')[0];
+  if (body === undefined) return null;
+  return Object.fromEntries(body.split(';')
+    .map(declaration => declaration.split(':').map(part => part.trim()))
+    .filter(([property, value]) => property && value));
+};
+
+/** A length in plain px, or null — a radius in rem or a percentage is not a number an icon can mirror. */
+const px = value => (/^[\d.]+px$/.test(value ?? '') ? Number.parseFloat(value) : null);
+
+/**
+ * The icons are the header's brand mark, so the two have to agree about the shape — and they are
+ * written in different languages, one as a stylesheet rule and one as geometry, with no way to
+ * import each other. The guard reads the mark out of the stylesheet that draws it and compares
+ * every value the icons are generated from, because getting this wrong is invisible: reshape the
+ * header and it still looks right, while the tab quietly keeps the proportions it used to have.
+ */
+export function assertIconsMatchBrandMark(css, mark) {
+  const box = ruleBody(css, '.brand-mark');
+  const bar = ruleBody(css, '.brand-mark i');
+  const bars = mark.heights.map((_, index) => ruleBody(css, `.brand-mark i:nth-child(${index + 1})`));
+
+  const missing = [['the mark box', box], ['a bar', bar], ...bars.map((body, index) => [`bar ${index + 1}`, body])]
+    .filter(([, body]) => !body)
+    .map(([what]) => what);
+  if (missing.length) {
+    throw new Error(`The icons are drawn from the header's brand mark, and ${BRAND_MARK_STYLESHEET} no longer declares ${missing.join(', ')}`);
+  }
+
+  const radii = bar['border-radius'].split(/\s+/);
+  if (![1, 2, 4].includes(radii.length)) {
+    throw new Error(`The brand mark's border-radius (${bar['border-radius']}) is a ${radii.length}-value shorthand, which rounds the two corners of a pair by different amounts — a shape the icons cannot mirror`);
+  }
+  // One value rounds all four corners; two give the top pair then the base pair; four run clockwise
+  // from the top left, which puts the base pair third.
+  const radius = index => (radii.length === 4 ? radii[index * 2] : radii.length === 1 ? radii[0] : radii[index]);
+
+  const compared = [
+    ['the mark box width', px(box.width), mark.box],
+    ['the mark box height', px(box.height), mark.box],
+    ['the gap between the bars', px(box.gap), mark.gap],
+    ['the bar width', px(bar.width), mark.barWidth],
+    ['the top radius', px(radius(0)), mark.topRadius],
+    ['the base radius', px(radius(1)), mark.baseRadius],
+    ...bars.map((body, index) => [`the height of bar ${index + 1}`, px(body.height), mark.heights[index]]),
+    ['which bar is rose', bars.findIndex(body => body.background === 'var(--rose)') + 1, mark.rose],
+  ];
+  const differences = compared
+    .filter(([, found, expected]) => found !== expected)
+    .map(([what, found, expected]) => `${what} is ${found ?? 'not a plain px value'} in ${BRAND_MARK_STYLESHEET} and ${expected} in the icons`);
+  if (differences.length) {
+    throw new Error(`The header's brand mark and the icons have parted company: ${differences.join('; ')} — update BRAND_MARK in src/favicon.js, or put the stylesheet back`);
+  }
+  return compared.length;
 }
 
 /**

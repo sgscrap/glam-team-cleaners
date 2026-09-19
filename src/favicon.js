@@ -66,21 +66,50 @@ export const readPalette = (tokens = readFileSync(TOKENS_FILE, 'utf8')) => Objec
   }),
 );
 
-/*
- * The header mark, as the stylesheet draws it: a 28-unit box holding three bars 7 wide, 2 apart,
- * 14 / 25 / 19 tall, flush to the bottom, with the 5px top radius a 7px-wide bar clamps to half
- * its width. These numbers are that box at 2x inside the icon's 64-unit canvas.
+/**
+ * The header mark, as 03-header.css draws it, and the scale the icons draw it at.
+ *
+ * These are the stylesheet's own numbers restated where a canvas can read them — one is CSS and the
+ * other is geometry, and neither can import the other. That is the drift the guard exists to catch:
+ * change a bar's height in the stylesheet and the build stops, rather than leaving a tab showing
+ * proportions the site stopped using, in a file nobody opens.
  */
+export const BRAND_MARK = {
+  box: 28,
+  barWidth: 7,
+  gap: 2,
+  heights: [14, 25, 19],
+  topRadius: 5,
+  baseRadius: 1,
+  /** Which bar carries the rose, counted the way `:nth-child` counts. */
+  rose: 2,
+  /** The icons draw the mark at 2x, so a 7px bar becomes 14 units of a 64-unit canvas. */
+  scale: 2,
+};
+
+/** The partial that draws the mark, so the guard that ties the icons to it reads the right file. */
+export const BRAND_MARK_STYLESHEET = 'src/styles/03-header.css';
+
+/** The canvas the icons are drawn on, and the ground the mark sits on within it. */
 const CANVAS = 64;
-const MARK_BOX = 56;
-const MARK_LEFT = 4;
-const BAR_WIDTH = 14;
-const BAR_GAP = 4;
-const BAR_HEIGHTS = [28, 50, 38];
-const BAR_TOKENS = ['ivory', 'rose', 'ivory'];
-const TOP_RADIUS = BAR_WIDTH / 2;
-const BASE_RADIUS = 2;
 const GROUND_RADIUS = 14;
+
+/* Everything below is the mark's numbers at the icon's scale, so there is one description of the
+   shape rather than one per file. */
+const MARK_BOX = BRAND_MARK.box * BRAND_MARK.scale;
+const MARK_LEFT = (CANVAS - MARK_BOX) / 2;
+const BAR_WIDTH = BRAND_MARK.barWidth * BRAND_MARK.scale;
+const BAR_GAP = BRAND_MARK.gap * BRAND_MARK.scale;
+const BAR_HEIGHTS = BRAND_MARK.heights.map(height => height * BRAND_MARK.scale);
+const BAR_TOKENS = BRAND_MARK.heights.map((_, index) => (index + 1 === BRAND_MARK.rose ? 'rose' : 'ivory'));
+
+/**
+ * The tops are half-round: the stylesheet asks for a 5px radius on a 7px bar, and a browser clamps
+ * that to half the width, which is why the mark reads as three rounded pillars. The icon has to
+ * clamp the same way or it would draw a shape the header never shows.
+ */
+const TOP_RADIUS = Math.min(BRAND_MARK.topRadius, BRAND_MARK.barWidth / 2) * BRAND_MARK.scale;
+const BASE_RADIUS = BRAND_MARK.baseRadius * BRAND_MARK.scale;
 
 /**
  * Every shape the mark is made of, ground first so the bars paint over it, in the 64-unit canvas

@@ -1,5 +1,5 @@
 import { site, business, hero, services, footer, openingHours, faqs } from './data.js';
-import { FAVICON_FILE } from './favicon.js';
+import { ICON_LINKS } from './favicon.js';
 import { esc, jsonBlock, GENERATED_NOTE } from './html.js';
 import { largestPath } from './photos.js';
 
@@ -11,6 +11,13 @@ const pageUrl = `${site.url}/`;
  * pointing at whatever host the site used to live on.
  */
 const socialCard = `${site.url}/${site.socialImage.file}`;
+
+/**
+ * The icon declarations, rendered from the one list that also tells the build guard what to expect
+ * to find here — so the page cannot declare one path while the build checks another.
+ */
+const iconLinks = ICON_LINKS.map(({ rel, href, ...attributes }) => `<link rel="${rel}" href="${esc(href)}"${
+  Object.entries(attributes).map(([name, value]) => ` ${name}="${value}"`).join('')}>`).join('\n');
 
 /** The crawler files, named here so robots.txt and the build agree on one spelling. */
 export const SITEMAP_FILE = 'sitemap.xml';
@@ -97,7 +104,7 @@ export const head = () => `<meta charset="UTF-8">
 <title>${esc(site.title)}</title>
 <meta name="description" content="${esc(site.description)}">
 <link rel="canonical" href="${esc(pageUrl)}">
-<link rel="icon" href="${esc(FAVICON_FILE)}" type="image/svg+xml" sizes="any">
+${iconLinks}
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${esc(site.name)}">
 <meta property="og:title" content="${esc(site.title)}">

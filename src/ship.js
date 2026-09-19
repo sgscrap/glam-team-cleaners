@@ -1,5 +1,6 @@
 import { readdirSync } from 'node:fs';
 import { ROBOTS_FILE, SITEMAP_FILE } from './seo.js';
+import { ICON_FILES } from './favicon.js';
 
 /**
  * The files the site is served from — the single owner of that list.
@@ -15,7 +16,13 @@ import { ROBOTS_FILE, SITEMAP_FILE } from './seo.js';
  */
 export const ENTRY_FILES = ['index.html', SITEMAP_FILE, ROBOTS_FILE];
 
-const ROOT_FILES = [...ENTRY_FILES, 'styles.css', 'script.js'];
+/**
+ * Asked for by name at the site root, whatever any page declares — /favicon.ico by a client that
+ * found no declaration, /apple-touch-icon.png by a phone adding the site to a home screen.
+ */
+const NAMED_AT_ROOT = [ICON_FILES.ico, ICON_FILES.touch];
+
+const ROOT_FILES = [...ENTRY_FILES, 'styles.css', 'script.js', ...NAMED_AT_ROOT];
 const ASSET_DIRECTORY = 'assets';
 
 /** Every file under a directory, as site-root-relative paths, so nested assets are covered. */

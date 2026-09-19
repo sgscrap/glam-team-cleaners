@@ -23,6 +23,7 @@ import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
 import { MAX_BYTES, servedPhotographs } from '../src/photos.js';
+import { FAVICON_FILE, FAVICON_TOKENS, readPalette } from '../src/favicon.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -41,6 +42,10 @@ const pageUrl = `${site.url}/`;
  * agree with it, which is the shape of test that lets a rule quietly stop ruling.
  */
 const retiredHost = 'https://sgscrap.github.io';
+
+/** The icon as it is published, and the tokens it is generated from. */
+const palette = readPalette();
+const favicon = read(FAVICON_FILE);
 
 /**
  * A PNG with one text chunk and nothing else, so the reader can be exercised on structures the
@@ -431,6 +436,27 @@ const CASES = [
       ['the retired host in a sitemap <loc>', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap().replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), robots: seo.robots() }), /sitemap\.xml/],
       ['the retired host in the Sitemap line of robots.txt', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, `${retiredHost}/glam-team-cleaners/${seo.SITEMAP_FILE}`) }), /robots\.txt/],
       ['the retired host only in the share card URL', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(`<meta property="og:image" content="${pageUrl}${site.socialImage.file}">`, `<meta property="og:image" content="${retiredHost}/glam-team-cleaners/${site.socialImage.file}">`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
+    ],
+  },
+  {
+    guard: 'assertFaviconDeclared',
+    accepts: [
+      { why: 'the real page', run: () => checks.assertFaviconDeclared(indexHtml, FAVICON_FILE), expect: href => assert.equal(href, FAVICON_FILE) },
+    ],
+    rejects: [
+      ['a page whose head lost the icon link', () => checks.assertFaviconDeclared(indexHtml.replace(`<link rel="icon" href="${FAVICON_FILE}" type="image/svg+xml" sizes="any">`, ''), FAVICON_FILE), /declares no <link rel="icon">/],
+      ['a page declaring an icon somewhere else', () => checks.assertFaviconDeclared(indexHtml.replace(FAVICON_FILE, 'assets/old-icon.png'), FAVICON_FILE), /declares an icon at assets\/old-icon\.png/],
+    ],
+  },
+  {
+    guard: 'assertFaviconMatchesPalette',
+    accepts: [
+      { why: 'the committed icon against the stylesheet tokens', run: () => checks.assertFaviconMatchesPalette(favicon, palette), expect: count => assert.equal(count, FAVICON_TOKENS.length) },
+    ],
+    rejects: [
+      ['an icon drawn without one of the palette colours', () => checks.assertFaviconMatchesPalette(favicon.replaceAll(palette.rose, palette.ivory), palette), new RegExp(`drawn without ${palette.rose}`)],
+      ['an icon carrying a colour the stylesheet does not use', () => checks.assertFaviconMatchesPalette(favicon.replace(palette.espresso, '#ff0000'), palette), /off-palette #ff0000/],
+      ['a token that moved out from under the icon', () => checks.assertFaviconMatchesPalette(favicon, { ...palette, rose: '#123456' }), /drawn without #123456/],
     ],
   },
 ];

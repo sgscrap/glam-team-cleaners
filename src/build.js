@@ -5,6 +5,7 @@ import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
+import { FAVICON_FILE, readPalette } from './favicon.js';
 import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
   RUNTIME_KEYS,
@@ -13,6 +14,8 @@ import {
   assertE164Phone,
   assertEmbeddedJsonParses,
   assertFaqMatchesPage,
+  assertFaviconDeclared,
+  assertFaviconMatchesPalette,
   assertHtmlIsWellFormed,
   assertImagesAreLocal,
   assertKnownIcons,
@@ -169,6 +172,14 @@ const publishedSummary = unreferenced.length
   ? `${unreferenced.length} referenced by nothing (${Math.round(unreferencedBytes / 1024)} KB): ${unreferenced.join(', ')}`
   : 'every file referenced';
 console.log(`published set  ${shipped.size} files — ${referenceCount} references, all ship; ${publishedSummary}`);
+
+// The favicon, both halves of it, and neither is visible: a page that declares no icon sends
+// every browser to /favicon.ico and that 404s, and an icon the stylesheet has moved on from
+// repaints the site while the tab keeps the old colours. The file is safe to read because a
+// missing one is a reference that does not ship, which the guard above reported by name.
+assertFaviconDeclared(artifacts['index.html'], FAVICON_FILE);
+const faviconColors = assertFaviconMatchesPalette(readFileSync(FAVICON_FILE, 'utf8'), readPalette());
+console.log(`favicon  ${FAVICON_FILE} declared on the page, on palette (${faviconColors} colours)`);
 
 // What the page is allowed to show. A photograph the business does not own is not decoration
 // here: it stands in for work under a caption claiming that work was done.

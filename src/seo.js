@@ -1,4 +1,5 @@
 import { site, business, hero, services, footer, openingHours, faqs } from './data.js';
+import { FAVICON_FILE } from './favicon.js';
 import { esc, jsonBlock, GENERATED_NOTE } from './html.js';
 import { largestPath } from './photos.js';
 
@@ -96,6 +97,7 @@ export const head = () => `<meta charset="UTF-8">
 <title>${esc(site.title)}</title>
 <meta name="description" content="${esc(site.description)}">
 <link rel="canonical" href="${esc(pageUrl)}">
+<link rel="icon" href="${esc(FAVICON_FILE)}" type="image/svg+xml" sizes="any">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${esc(site.name)}">
 <meta property="og:title" content="${esc(site.title)}">

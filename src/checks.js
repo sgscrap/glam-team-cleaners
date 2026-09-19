@@ -7,6 +7,7 @@
  * to be sitting inside.
  */
 import { FAQ_TYPE, ROBOTS_FILE, SITEMAP_FILE, sitemapUrl } from './seo.js';
+import { FAVICON_FILE } from './favicon.js';
 import { ENTRY_FILES } from './ship.js';
 import { esc } from './html.js';
 
@@ -243,6 +244,44 @@ export function assertShareImageShips(html, site, shipped) {
     throw new Error('og:image:alt is empty: the share card would be undescribed');
   }
   return site.socialImage.file;
+}
+
+/**
+ * The site declares its icon. A page with no <link rel="icon"> is not visibly broken — it simply
+ * makes every browser ask for /favicon.ico instead, which 404s, and only a network panel shows
+ * it. Asserted for the same reason the share image is: nobody would notice it missing by looking.
+ */
+export function assertFaviconDeclared(html, href) {
+  const declared = between(html, '<link rel="icon" href="', '"')[0];
+  if (!declared) {
+    throw new Error('The page declares no <link rel="icon">, so a browser falls back to requesting /favicon.ico and gets a 404');
+  }
+  if (declared !== href) {
+    throw new Error(`The page declares an icon at ${declared}, but the site ships it at ${href}`);
+  }
+  return href;
+}
+
+/**
+ * The favicon is the one published file whose drift nothing on the page reveals: the site
+ * repaints and the tab keeps the old colours, indefinitely, because no visitor ever sees the two
+ * side by side. The set of colours is compared rather than each one merely looked for, so a
+ * hand-edit that introduces a fourth colour is caught as well as a token that moved underneath.
+ */
+export function assertFaviconMatchesPalette(svg, palette) {
+  const found = new Set([...svg.matchAll(/fill="(#[0-9a-fA-F]{6})"/g)].map(match => match[1].toLowerCase()));
+  const expected = new Set(Object.values(palette).map(colour => colour.toLowerCase()));
+  const faults = [
+    [...expected].filter(colour => !found.has(colour)),
+    [...found].filter(colour => !expected.has(colour)),
+  ];
+  const missing = faults[0].length ? `drawn without ${faults[0].join(', ')}` : '';
+  const offPalette = faults[1].length ? `off-palette ${faults[1].join(', ')}` : '';
+  const problem = [missing, offPalette].filter(Boolean);
+  if (problem.length) {
+    throw new Error(`The favicon no longer matches the stylesheet palette (${FAVICON_FILE}): ${problem.join('; ')} — regenerate it with \`npm run favicon\``);
+  }
+  return found.size;
 }
 
 /**

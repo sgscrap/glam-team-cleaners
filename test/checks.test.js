@@ -35,6 +35,7 @@ const portrait = readFileSync(new URL('../photos/emely/emely-01.png', import.met
 const shipped = new Set(shippedFiles());
 const pageUrl = `${site.url}/`;
 const headerCss = read(BRAND_MARK_STYLESHEET);
+const svgIcon = read(ICON_FILES.svg);
 
 /**
  * The host this site was published from before it moved to its own domain, spelled here as a
@@ -451,6 +452,20 @@ const CASES = [
       ['the retired host in a sitemap <loc>', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap().replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), robots: seo.robots() }), /sitemap\.xml/],
       ['the retired host in the Sitemap line of robots.txt', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, `${retiredHost}/glam-team-cleaners/${seo.SITEMAP_FILE}`) }), /robots\.txt/],
       ['the retired host only in the share card URL', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(`<meta property="og:image" content="${pageUrl}${site.socialImage.file}">`, `<meta property="og:image" content="${retiredHost}/glam-team-cleaners/${site.socialImage.file}">`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
+    ],
+  },
+  {
+    guard: 'assertFaviconAdaptsToDarkScheme',
+    accepts: [
+      { why: 'the published vector icon', run: () => checks.assertFaviconAdaptsToDarkScheme(svgIcon), expect: count => assert.equal(count, 1) },
+    ],
+    rejects: [
+      ['an icon with no dark-scheme rule at all', () => checks.assertFaviconAdaptsToDarkScheme(svgIcon.replace(/<style>[\s\S]*?<\/style>\n/, '')), /no longer carries a dark-scheme rule/],
+      ['a dark-scheme rule that recolours the ground instead of dropping it', () => checks.assertFaviconAdaptsToDarkScheme(svgIcon.replace('{ fill: none; }', '{ fill: #fcfaf6; }')), /Only the ground's fill may vary with the colour scheme, and in assets\/favicon\.svg the dark-scheme rule changes \.ground \{ fill: #fcfaf6 \}/],
+      ['a dark-scheme rule that recolours a bar', () => checks.assertFaviconAdaptsToDarkScheme(svgIcon.replace('{ fill: none; }', '{ fill: none; } .bar { fill: #2c1d20; }')), /changes \.ground \{ fill: none \}, \.bar \{ fill: #2c1d20 \}/],
+      ['a ground that varies by more than its fill', () => checks.assertFaviconAdaptsToDarkScheme(svgIcon.replace('{ fill: none; }', '{ fill: none; opacity: 0; }')), /changes \.ground \{ fill: none; opacity: 0 \}/],
+      ['a rule whose ground is gone from the markup', () => checks.assertFaviconAdaptsToDarkScheme(svgIcon.replace(' class="ground"', '')), /is inert: no element carries class="ground"/],
+      ['a rule left outside a style element', () => checks.assertFaviconAdaptsToDarkScheme(svgIcon.replace(/<\/?style>\n?/g, '')), /is not inside a <style> element/],
     ],
   },
   {

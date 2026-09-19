@@ -7,7 +7,7 @@
  * to be sitting inside.
  */
 import { FAQ_TYPE, ROBOTS_FILE, SITEMAP_FILE, sitemapUrl } from './seo.js';
-import { BRAND_MARK_STYLESHEET } from './favicon.js';
+import { BRAND_MARK_STYLESHEET, GROUND_CLASS, ICON_FILES } from './favicon.js';
 import { ENTRY_FILES } from './ship.js';
 import { esc } from './html.js';
 
@@ -263,6 +263,59 @@ export function assertIconsDeclared(html, icons) {
     throw new Error(`The page does not declare ${missing.map(({ rel, href }) => `${rel} at ${href}`).join('; ')}: a client that finds no declaration asks for /favicon.ico at the site root instead, which shows up in nothing but a network panel`);
   }
   return icons.length;
+}
+
+/**
+ * The vector icon is the only one of the three that can follow the browser's colour scheme — the
+ * `.ico` and the home-screen PNG are pixels, fixed at the colours they were encoded with — and what
+ * it does with that is drop its ground where the scheme is dark, so the mark sits on the strip the
+ * way the header draws it on the site's own dark surfaces.
+ *
+ * That override is a rule inside the file, which makes it the one part of these icons nothing else
+ * can notice the loss of: delete it and the icon still renders, still validates, and is simply back
+ * to a dark tile on a dark strip. So the rules are read and held — the scheme is declared, exactly
+ * one thing varies by it, and that thing is the ground going away rather than a second colour for
+ * the mark. The bars are the brand in either scheme, and a colour that changed with the scheme
+ * would be a different icon in a dark tab.
+ */
+export function assertFaviconAdaptsToDarkScheme(svg) {
+  const query = '@media (prefers-color-scheme: dark) {';
+  const opened = svg.indexOf(query);
+  if (opened === -1) {
+    throw new Error(`${ICON_FILES.svg} no longer carries a dark-scheme rule, so a browser that reports a dark theme gets the light scheme's ground — a tile only a little lighter than the strip it is drawn on`);
+  }
+
+  // In a file served as XML, a rule outside <style> is text: the icon still parses and still shows
+  // the mark, and simply keeps the light scheme's ground for a browser that asked for dark.
+  if (!/<style>([\s\S]*?)<\/style>/.exec(svg)?.[1].includes(query)) {
+    throw new Error(`The dark-scheme rule in ${ICON_FILES.svg} is not inside a <style> element, where a browser reads it as text rather than a rule — the ground would stay in a dark scheme with nothing to show for it`);
+  }
+
+  // The block is read by counting braces rather than by matching to the first `}`: the rule inside
+  // it ends with one of its own, and a pattern that stopped there would read an empty block and
+  // call a working icon broken.
+  const block = (() => {
+    let depth = 0;
+    for (let at = opened + query.length - 1; at < svg.length; at += 1) {
+      if (svg[at] === '{') depth += 1;
+      else if (svg[at] === '}' && --depth === 0) return svg.slice(opened + query.length, at);
+    }
+    return null;
+  })();
+  const rules = [...(block ?? '').matchAll(/\.([\w-]+)\s*\{([^}]*)\}/g)]
+    .map(([, name, body]) => [name, Object.fromEntries(body.split(';')
+      .map(part => part.split(':').map(side => side.trim()))
+      .filter(([property, value]) => property && value))]);
+  const written = rules.map(([name, body]) => `.${name} { ${Object.entries(body).map(([property, value]) => `${property}: ${value}`).join('; ')} }`);
+  const wrong = rules.filter(([name, body]) => name !== GROUND_CLASS || Object.keys(body).join() !== 'fill' || body.fill !== 'none');
+  if (!rules.length || wrong.length) {
+    throw new Error(`Only the ground's fill may vary with the colour scheme, and in ${ICON_FILES.svg} the dark-scheme rule changes ${written.length ? written.join(', ') : 'nothing'} — the ground steps aside in a dark scheme and the mark's own colours stay what they are`);
+  }
+
+  if (!svg.includes(`class="${GROUND_CLASS}"`)) {
+    throw new Error(`The dark-scheme rule in ${ICON_FILES.svg} is inert: no element carries class="${GROUND_CLASS}", so the ground it means to drop is unchanged and the rule reads as a working one`);
+  }
+  return rules.length;
 }
 
 /** The declarations inside one rule block, or null when the stylesheet has no rule for that selector. */

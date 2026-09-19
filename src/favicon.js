@@ -128,6 +128,13 @@ const BASE_RADIUS = BRAND_MARK.baseRadius * BRAND_MARK.scale;
 const GROUND_RADIUS = Math.round(MARK_BOX * (BRAND_MARK.groundRadius / 100) * 100) / 100;
 
 /**
+ * The ground's class in the vector icon, so the one shape that varies with the browser's colour
+ * scheme can be addressed by the stylesheet inside it. Named here because two things need the
+ * same spelling: the shape that carries it, and the guard that checks something carries it.
+ */
+export const GROUND_CLASS = 'ground';
+
+/**
  * Every shape the mark is made of, ground first so the bars paint over it, in the 64-unit canvas
  * the vector icon and the rasters share.
  *
@@ -143,6 +150,7 @@ export const markShapes = (palette, { bleed = false } = {}) => {
   return [
     {
       fill: palette.espresso,
+      class: GROUND_CLASS,
       x: 0,
       y: 0,
       width: CANVAS,
@@ -166,25 +174,39 @@ export const markShapes = (palette, { bleed = false } = {}) => {
  * One shape as SVG. The ground is a rectangle; a bar is a path, because its top is rounded to half
  * its width and its base barely at all, and one `rx` cannot say both.
  */
-const shapeSvg = ({ fill, x, y, width, height, top, base }) => {
+const shapeSvg = ({ fill, class: kind, x, y, width, height, top, base }) => {
+  const named = kind ? ` class="${kind}"` : '';
   if (top === base) {
-    return `<rect x="${x}" y="${y}" width="${width}" height="${height}"${top ? ` rx="${top}"` : ''} fill="${fill}"/>`;
+    return `<rect${named} x="${x}" y="${y}" width="${width}" height="${height}"${top ? ` rx="${top}"` : ''} fill="${fill}"/>`;
   }
   const right = x + width;
   const bottom = y + height;
   const across = right - top > x + top ? `H${right - top}` : '';
-  return `<path fill="${fill}" d="M${x + top} ${y}${across}`
+  return `<path${named} fill="${fill}" d="M${x + top} ${y}${across}`
     + `A${top} ${top} 0 0 1 ${right} ${y + top}V${bottom - base}`
     + `A${base} ${base} 0 0 1 ${right - base} ${bottom}H${x + base}`
     + `A${base} ${base} 0 0 1 ${x} ${bottom - base}V${y + top}`
     + `A${top} ${top} 0 0 1 ${x + top} ${y}z"/>`;
 };
 
-/** The vector icon: the mark's own shape, which is what a modern browser prefers to a raster. */
+/**
+ * The vector icon: the mark's own shape, which is what a modern browser prefers to a raster.
+ *
+ * It is the only icon that can follow the browser's colour scheme — the `favicon.ico` and the
+ * home-screen PNG are pixels, fixed at the colours they were encoded with — so the tile is left to
+ * the stylesheet here. The ground is the light scheme's backdrop, because the mark's pale bars need
+ * something dark to sit on; where the browser reports a dark scheme the strip the icon is drawn on
+ * is already that backdrop, so the tile steps aside and the mark sits on it directly, exactly as
+ * the header draws the mark on the site's own dark surfaces. The mark's colours never vary: the
+ * bars are the brand in either scheme, and only the ground may move.
+ */
 export const faviconSvg = (palette = readPalette()) => `<?xml version="1.0" encoding="UTF-8"?>
 <!-- ${GENERATED_NOTE} Built from src/favicon.js. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}">
 <title>${site.name}</title>
+<style>
+  @media (prefers-color-scheme: dark) { .${GROUND_CLASS} { fill: none; } }
+</style>
 ${markShapes(palette).map(shapeSvg).join('\n')}
 </svg>
 `;

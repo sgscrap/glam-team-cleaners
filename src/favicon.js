@@ -7,10 +7,12 @@
  * asks for by name, and the home-screen icon cannot disagree about the shape.
  *
  * Its colours are read out of the stylesheet tokens rather than copied here, because the
- * stylesheet is where they are owned. The icons are built by src/build.js like the page and the
- * stylesheet are, so `npm run check` fails if a committed one no longer matches the tokens —
- * change `--rose` and the build stops until they are rebuilt, rather than letting a tab keep last
- * season's pink.
+ * stylesheet is where they are owned. Its geometry is the header's mark restated in the one place a
+ * canvas can read, and `assertIconsMatchBrandMark` compares the ten numbers below against
+ * 03-header.css — so reshaping the header stops the build rather than leaving a tab on the old
+ * proportions. The icons are built by src/build.js like the page and the stylesheet are, so
+ * `npm run check` fails if a committed one no longer matches the tokens — change `--rose` and the
+ * build stops until they are rebuilt, rather than letting a tab keep last season's pink.
  */
 import { readFileSync } from 'node:fs';
 import { site } from './data.js';
@@ -83,6 +85,12 @@ export const BRAND_MARK = {
   baseRadius: 1,
   /** Which bar carries the rose, counted the way `:nth-child` counts. */
   rose: 2,
+  /**
+   * The corner on the icon's ground, as a percentage of the mark's box — `--icon-radius` on
+   * `.brand-mark`. A share rather than a length, because the same icon is drawn from a 16px tab to a
+   * 180px home screen and a fixed corner would be wrong at one end of that range.
+   */
+  groundRadius: 25,
   /** The icons draw the mark at 2x, so a 7px bar becomes 14 units of a 64-unit canvas. */
   scale: 2,
 };
@@ -90,9 +98,7 @@ export const BRAND_MARK = {
 /** The partial that draws the mark, so the guard that ties the icons to it reads the right file. */
 export const BRAND_MARK_STYLESHEET = 'src/styles/03-header.css';
 
-/** The canvas the icons are drawn on, and the ground the mark sits on within it. */
 const CANVAS = 64;
-const GROUND_RADIUS = 14;
 
 /* Everything below is the mark's numbers at the icon's scale, so there is one description of the
    shape rather than one per file. */
@@ -110,6 +116,16 @@ const BAR_TOKENS = BRAND_MARK.heights.map((_, index) => (index + 1 === BRAND_MAR
  */
 const TOP_RADIUS = Math.min(BRAND_MARK.topRadius, BRAND_MARK.barWidth / 2) * BRAND_MARK.scale;
 const BASE_RADIUS = BRAND_MARK.baseRadius * BRAND_MARK.scale;
+
+/**
+ * The ground the mark sits on inside the icon: the one shape here that the stylesheet has no drawing
+ * of, since a tab has a square of its own and the header has no tile around the mark. Its corner is
+ * therefore the mark's own — the share `--icon-radius` declares of the box — so the ground still
+ * follows the header rather than being the one number an icon gets to keep to itself.
+ */
+// Rounded to a hundredth of a canvas unit: a share of an odd box lands on a long binary fraction
+// (10% of 56 is 5.6000000000000005), and these artifacts are files someone opens and reads.
+const GROUND_RADIUS = Math.round(MARK_BOX * (BRAND_MARK.groundRadius / 100) * 100) / 100;
 
 /**
  * Every shape the mark is made of, ground first so the bars paint over it, in the 64-unit canvas

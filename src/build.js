@@ -20,6 +20,7 @@ import {
   assertPublishedUrlsAgree,
   assertRecordPresent,
   assertReferencesShip,
+  assertRetiredHostsAbsent,
   assertRuntimeConfigKeys,
   assertSearchCopyFits,
   assertShareImageShips,
@@ -143,6 +144,14 @@ assertPublishedUrlsAgree({
   sitemap: artifacts[seo.SITEMAP_FILE],
   robots: artifacts[seo.ROBOTS_FILE],
 }, site);
+
+// Only now that every file a crawler reads exists: the guard reads all of each one, not just the
+// canonical line, so a retired host in the share card's absolute URL is caught here too.
+assertRetiredHostsAbsent({
+  html: artifacts['index.html'],
+  sitemap: artifacts[seo.SITEMAP_FILE],
+  robots: artifacts[seo.ROBOTS_FILE],
+});
 
 /**
  * The ship-set check, both directions, run here rather than inside the page builder because

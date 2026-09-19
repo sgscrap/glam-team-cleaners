@@ -35,6 +35,14 @@ const shipped = new Set(shippedFiles());
 const pageUrl = `${site.url}/`;
 
 /**
+ * The host this site was published from before it moved to its own domain, spelled here as a
+ * literal rather than read from `checks.RETIRED_HOSTS`. If someone empties that list, these
+ * cases must still fail — a test that asked the guard what it considers retired could only ever
+ * agree with it, which is the shape of test that lets a rule quietly stop ruling.
+ */
+const retiredHost = 'https://sgscrap.github.io';
+
+/**
  * A PNG with one text chunk and nothing else, so the reader can be exercised on structures the
  * real card does not happen to contain — malformed provenance above all. Chunk CRCs and the
  * IHDR body are left as zeroes: the reader is not a validator, and pretending otherwise would
@@ -411,6 +419,18 @@ const CASES = [
       ['a stale Sitemap line in robots.txt', () => checks.assertPublishedUrlsAgree({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, 'https://old.example/sitemap.xml') }, site), /the Sitemap line in robots\.txt is https:\/\/old\.example\/sitemap\.xml/],
       ['a second <loc> nobody reviewed', () => checks.assertPublishedUrlsAgree({ html: indexHtml, sitemap: seo.sitemap().replace('</urlset>', '<url><loc>https://elsewhere.test/</loc></url>\n</urlset>'), robots: seo.robots() }, site), /Unexpected URLs published to crawlers: sitemap\.xml/],
       ['a missing canonical link', () => checks.assertPublishedUrlsAgree({ html: indexHtml.replace(`<link rel="canonical" href="${pageUrl}">`, ''), sitemap: seo.sitemap(), robots: seo.robots() }, site), /the canonical link in index\.html is missing/],
+    ],
+  },
+  {
+    guard: 'assertRetiredHostsAbsent',
+    accepts: [
+      { why: 'the published page, sitemap and robots', run: () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots() }) },
+    ],
+    rejects: [
+      ['the retired host in the canonical link', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
+      ['the retired host in a sitemap <loc>', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap().replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), robots: seo.robots() }), /sitemap\.xml/],
+      ['the retired host in the Sitemap line of robots.txt', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, `${retiredHost}/glam-team-cleaners/${seo.SITEMAP_FILE}`) }), /robots\.txt/],
+      ['the retired host only in the share card URL', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(`<meta property="og:image" content="${pageUrl}${site.socialImage.file}">`, `<meta property="og:image" content="${retiredHost}/glam-team-cleaners/${site.socialImage.file}">`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
     ],
   },
 ];

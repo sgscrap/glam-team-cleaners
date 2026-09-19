@@ -5,7 +5,7 @@ import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
-import { ICON_LINKS, iconFiles } from './favicon.js';
+import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_LINKS, iconFiles } from './favicon.js';
 import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
   RUNTIME_KEYS,
@@ -16,6 +16,7 @@ import {
   assertFaqMatchesPage,
   assertHtmlIsWellFormed,
   assertIconsDeclared,
+  assertIconsMatchBrandMark,
   assertImagesAreLocal,
   assertKnownIcons,
   assertPhotographsWithinBudget,
@@ -181,6 +182,12 @@ console.log(`published set  ${shipped.size} files — ${referenceCount} referenc
 // naming a path that is not published sends it to the /favicon.ico fallback instead.
 const declaredIcons = assertIconsDeclared(artifacts['index.html'], ICON_LINKS);
 console.log(`icons  ${declaredIcons} declared and published: ${ICON_LINKS.map(({ href }) => href).join(', ')}`);
+
+// And the shape they are drawn from, read out of the stylesheet that draws the header's mark: the
+// icon's numbers are geometry and the stylesheet's are CSS, and one silently drifting from the other
+// shows up in a tab nobody inspects.
+const markValues = assertIconsMatchBrandMark(readFileSync(BRAND_MARK_STYLESHEET, 'utf8'), BRAND_MARK);
+console.log(`brand mark  ${markValues} values in ${BRAND_MARK_STYLESHEET} agree with the icons`);
 
 // What the page is allowed to show. A photograph the business does not own is not decoration
 // here: it stands in for work under a caption claiming that work was done.

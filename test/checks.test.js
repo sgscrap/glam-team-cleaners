@@ -23,7 +23,7 @@ import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
 import { MAX_BYTES, servedPhotographs } from '../src/photos.js';
-import { ICON_FILES, ICON_LINKS } from '../src/favicon.js';
+import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_FILES, ICON_LINKS } from '../src/favicon.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -34,6 +34,7 @@ const socialCard = readFileSync(new URL('../assets/social-preview.png', import.m
 const portrait = readFileSync(new URL('../photos/emely/emely-01.png', import.meta.url));
 const shipped = new Set(shippedFiles());
 const pageUrl = `${site.url}/`;
+const headerCss = read(BRAND_MARK_STYLESHEET);
 
 /**
  * The host this site was published from before it moved to its own domain, spelled here as a
@@ -420,6 +421,21 @@ const CASES = [
       ['a stale Sitemap line in robots.txt', () => checks.assertPublishedUrlsAgree({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, 'https://old.example/sitemap.xml') }, site), /the Sitemap line in robots\.txt is https:\/\/old\.example\/sitemap\.xml/],
       ['a second <loc> nobody reviewed', () => checks.assertPublishedUrlsAgree({ html: indexHtml, sitemap: seo.sitemap().replace('</urlset>', '<url><loc>https://elsewhere.test/</loc></url>\n</urlset>'), robots: seo.robots() }, site), /Unexpected URLs published to crawlers: sitemap\.xml/],
       ['a missing canonical link', () => checks.assertPublishedUrlsAgree({ html: indexHtml.replace(`<link rel="canonical" href="${pageUrl}">`, ''), sitemap: seo.sitemap(), robots: seo.robots() }, site), /the canonical link in index\.html is missing/],
+    ],
+  },
+  {
+    guard: 'assertIconsMatchBrandMark',
+    accepts: [
+      { why: 'the real stylesheet and the icons generated from it', run: () => checks.assertIconsMatchBrandMark(headerCss, BRAND_MARK), expect: count => assert.equal(count, 10) },
+    ],
+    rejects: [
+      ['a bar whose height changed in the stylesheet', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(2) { height: 25px;', '.brand-mark i:nth-child(2) { height: 24px;'), BRAND_MARK), /the height of bar 2 is 24 in src\/styles\/03-header\.css and 25 in the icons/],
+      ['a wider bar', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i { display: block; width: 7px;', '.brand-mark i { display: block; width: 8px;'), BRAND_MARK), /the bar width is 8 in/],
+      ['a different gap between the bars', () => checks.assertIconsMatchBrandMark(headerCss.replace('align-items: flex-end; gap: 2px;', 'align-items: flex-end; gap: 3px;'), BRAND_MARK), /the gap between the bars is 3 in/],
+      ['the rose moving to another bar', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(2) { height: 25px; background: var(--rose); }', '.brand-mark i:nth-child(2) { height: 25px; }').replace('.brand-mark i:nth-child(3) { height: 19px; }', '.brand-mark i:nth-child(3) { height: 19px; background: var(--rose); }'), BRAND_MARK), /which bar is rose is 3 in/],
+      ['a height that is no longer a px value', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(1) { height: 14px; }', '.brand-mark i:nth-child(1) { height: 0.9rem; }'), BRAND_MARK), /the height of bar 1 is not a plain px value in/],
+      ['a rule that has gone', () => checks.assertIconsMatchBrandMark(headerCss.replace('.brand-mark i:nth-child(3) { height: 19px; }\n', ''), BRAND_MARK), /no longer declares bar 3/],
+      ['a border-radius the icons cannot mirror', () => checks.assertIconsMatchBrandMark(headerCss.replace('border-radius: 5px 5px 1px 1px;', 'border-radius: 5px 2px 1px;'), BRAND_MARK), /3-value shorthand/],
     ],
   },
   {

@@ -6,10 +6,16 @@
  * a header plus deflated scanlines — a few hundred bytes of either, which is why both live here
  * instead of behind an image library that a fresh clone would have to install.
  *
+ * The two readers at the end go the other way, so a guard can measure a published file instead of
+ * trusting the encoder that wrote it. They are the strict inverse of `png` and `ico` and nothing
+ * more: a reader that guessed at the rest of either format would be a second implementation to keep
+ * correct, and one that quietly accepted a different image would have a guard measuring the wrong
+ * thing.
+ *
  * Shapes are `{ fill: '#rrggbb', x, y, width, height, top, base }` in canvas units, drawn in order
  * so a later one paints over an earlier one.
  */
-import { deflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
 
 /**
  * Whether a point falls inside a rectangle whose top and bottom corners are rounded — `top` for
@@ -123,6 +129,36 @@ export const png = (size, pixels) => {
   ]);
 };
 
+/**
+ * A published PNG as RGBA pixels, top-down. 8-bit RGBA with filter 0 on every row is the only shape
+ * the encoder writes, so it is the only shape this reads; anything else throws rather than being
+ * guessed at.
+ */
+export const readPng = buffer => {
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  if (buffer[24] !== 8 || buffer[25] !== 6) {
+    throw new Error(`The PNG is not 8-bit RGBA (depth ${buffer[24]}, colour type ${buffer[25]}), which is the only shape the encoder writes`);
+  }
+
+  const parts = [];
+  for (let at = 8; at + 12 <= buffer.length;) {
+    const length = buffer.readUInt32BE(at);
+    if (buffer.toString('latin1', at + 4, at + 8) === 'IDAT') parts.push(buffer.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+
+  const raw = inflateSync(Buffer.concat(parts));
+  const stride = width * 4;
+  const pixels = Buffer.alloc(stride * height);
+  for (let row = 0; row < height; row += 1) {
+    const filter = raw[row * (stride + 1)];
+    if (filter !== 0) throw new Error(`Row ${row} of the PNG carries filter ${filter}, and the encoder writes filter 0 on every row`);
+    raw.copy(pixels, row * stride, row * (stride + 1) + 1, row * (stride + 1) + 1 + stride);
+  }
+  return { width, height, pixels };
+};
+
 /* --- ICO ----------------------------------------------------------------- */
 
 /** One frame as a bottom-up 32-bit DIB, followed by the 1-bit mask the format still requires. */
@@ -173,3 +209,41 @@ export const ico = frames => {
 
   return Buffer.concat([header, ...entries, ...images.map(({ data }) => data)]);
 };
+
+/**
+ * A published .ico as its frames, each RGBA and top-down like `readPng` returns, so a guard can
+ * measure either container the same way.
+ *
+ * The container's own claim about a frame is checked against the bitmap inside it: an entry that
+ * says 32 over a 16-pixel image renders as a blurred icon and looks like nothing else — exactly the
+ * kind of breakage that only shows up when something measures it.
+ */
+export const readIco = buffer => Array.from({ length: buffer.readUInt16LE(4) }, (_, index) => {
+  const entry = 6 + index * 16;
+  const size = buffer[entry] === 0 ? 256 : buffer[entry];
+  const at = buffer.readUInt32LE(entry + 12);
+  const header = buffer.readUInt32LE(at);
+  const width = buffer.readInt32LE(at + 4);
+  const height = buffer.readInt32LE(at + 8) / 2;
+  const bits = buffer.readUInt16LE(at + 14);
+  if (header !== 40 || bits !== 32) {
+    throw new Error(`Frame ${index} of the .ico is not a 32-bit DIB of the shape the encoder writes (${header}-byte header, ${bits} bits per pixel)`);
+  }
+  if (width !== size || height !== size) {
+    throw new Error(`Frame ${index} of the .ico is listed as ${size}px and holds a ${width}x${height} bitmap`);
+  }
+
+  const pixels = Buffer.alloc(size * size * 4);
+  for (let row = 0; row < size; row += 1) {
+    for (let column = 0; column < size; column += 1) {
+      // The DIB stores its rows bottom-up, in BGRA.
+      const from = at + 40 + ((size - 1 - row) * size + column) * 4;
+      const to = (row * size + column) * 4;
+      pixels[to] = buffer[from + 2];
+      pixels[to + 1] = buffer[from + 1];
+      pixels[to + 2] = buffer[from];
+      pixels[to + 3] = buffer[from + 3];
+    }
+  }
+  return { size, pixels };
+});

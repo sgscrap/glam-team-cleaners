@@ -7,7 +7,8 @@
  * to be sitting inside.
  */
 import { FAQ_TYPE, ROBOTS_FILE, SITEMAP_FILE, sitemapUrl } from './seo.js';
-import { BRAND_MARK_STYLESHEET, GROUND_CLASS, ICON_FILES } from './favicon.js';
+import { BRAND_MARK_STYLESHEET, GROUND_CLASS, ICON_CANVAS, ICON_FILES, markShapes, readPalette } from './favicon.js';
+import { readIco, readPng } from './raster.js';
 import { ENTRY_FILES } from './ship.js';
 import { esc } from './html.js';
 
@@ -263,6 +264,154 @@ export function assertIconsDeclared(html, icons) {
     throw new Error(`The page does not declare ${missing.map(({ rel, href }) => `${rel} at ${href}`).join('; ')}: a client that finds no declaration asks for /favicon.ico at the site root instead, which shows up in nothing but a network panel`);
   }
   return icons.length;
+}
+
+/**
+ * The frames an .ico has to carry — the sizes a tab, a bookmarks bar and a desktop shortcut ask it
+ * for — and the size Apple asks a home screen for. Spelled here rather than read from the encoder's
+ * constants, the same way the retired hosts are: a requirement read from the thing it constrains
+ * agrees with it in the very commit that changes it.
+ */
+export const REQUIRED_ICON_SIZES = { ico: [16, 32, 48], touch: 180 };
+
+/**
+ * What the published icons actually contain, measured rather than assumed.
+ *
+ * The other two guards cannot see this. `assertIconsMatchBrandMark` holds the mark's numbers to the
+ * stylesheet that draws the header, and the drift check holds each icon to what src/ generates —
+ * which is the same as holding it to the encoder, so a bug in the rasteriser or in a container
+ * ships twice: once as the icon, and once as the guard that should have caught it. Nothing there
+ * would notice if the mark were drawn at the wrong scale, sampled off by a pixel, flipped row by
+ * row, or given a frame whose alpha never made it into the file. Only an eye would, in a tab nobody
+ * inspects. So this reads the files back and measures them against the geometry they claim to be:
+ * where each bar starts and ends, what colour it is, which bar carries the rose, and what the
+ * ground does between and around them.
+ */
+export function assertIconsMatchIntendedGeometry(icons, { shapes, canvas = ICON_CANVAS, sizes = REQUIRED_ICON_SIZES } = {}) {
+  const [ground, ...bars] = shapes ?? markShapes(readPalette());
+  const failures = [];
+
+  const measure = (label, { size, pixels }, [floor, ...pillars]) => {
+    const hex = ([red, green, blue]) => `#${[red, green, blue].map(part => part.toString(16).padStart(2, '0')).join('')}`;
+    const channels = fill => [1, 3, 5].map(index => Number.parseInt(fill.slice(index, index + 2), 16));
+    const pixel = (x, y) => {
+      const index = (y * size + x) * 4;
+      return [pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3]];
+    };
+    const columnOf = canvasX => Math.min(size - 1, Math.floor((canvasX * size) / canvas));
+    const rowOf = canvasY => Math.min(size - 1, Math.floor((canvasY * size) / canvas));
+
+    /**
+     * A pixel lying wholly inside a canvas-space rectangle, so its colour is that shape's own
+     * rather than a blend of two. At 16px a bar is under two pixels wide and the gap between two
+     * of them is one, so not every region of the mark has one — a check that needs one and finds
+     * none asks for the region's centre pixel instead and settles for it being painted at all.
+     */
+    const solidIn = (left, top, right, bottom) => {
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          if (x >= (left * size) / canvas && x + 1 <= (right * size) / canvas
+            && y >= (top * size) / canvas && y + 1 <= (bottom * size) / canvas) return [x, y];
+        }
+      }
+      return null;
+    };
+
+    /** The colour the region is meant to be, sampled exactly where that is possible. */
+    const expectFill = (what, [left, top, right, bottom], fill) => {
+      const solid = solidIn(left, top, right, bottom);
+      const found = pixel(...(solid ?? [columnOf((left + right) / 2), rowOf((top + bottom) / 2)]));
+      if (solid && (found[3] !== 255 || hex(found) !== fill)) {
+        failures.push(`${label}: ${what} is ${found[3] === 255 ? hex(found) : 'translucent'} where the mark draws ${fill}`);
+      } else if (!solid && found[3] !== 255) {
+        failures.push(`${label}: ${what} is not painted (alpha ${found[3]}) where the mark draws ${fill}`);
+      }
+    };
+
+    /** How far a sampled colour is from a shape's own, so a blend can be attributed to the nearer. */
+    const awayFrom = (found, fill) => channels(fill).reduce((total, channel, index) => total + (found[index] - channel) ** 2, 0);
+
+    // Each bar, in the part of it no arc reaches, and the rows it actually paints in its own column
+    // — which is what says its height and that the three of them share a base.
+    //
+    // Read by colour rather than by opacity: the ground is opaque and under every bar, so every row
+    // of a bar's column is painted and only what painted it says where the bar starts and ends.
+    pillars.forEach((bar, index) => {
+      expectFill(`bar ${index + 1}`, [bar.x, bar.y + bar.top, bar.x + bar.width, bar.y + bar.height - bar.base], bar.fill);
+      const column = columnOf(bar.x + bar.width / 2);
+      const painted = [...Array(size).keys()]
+        .filter(y => awayFrom(pixel(column, y), bar.fill) < awayFrom(pixel(column, y), floor.fill));
+      const top = Math.round((bar.y * size) / canvas);
+      const base = Math.round(((bar.y + bar.height) * size) / canvas) - 1;
+      const span = painted.length ? [painted[0], painted[painted.length - 1]] : null;
+      const off = span ? [top - span[0], base - span[1]].map(distance => Math.abs(distance)) : [];
+      if (!span || off.some(distance => distance > 1)) {
+        failures.push(`${label}: bar ${index + 1} paints rows ${span ? `${span[0]}-${span[1]}` : 'nowhere'} where the mark puts it at ${top}-${base}`);
+      }
+
+      // And the same across, along a row low enough to cross all three: a bar the right height in
+      // the wrong place is a mark the wrong width, which nothing above would notice. Measured as
+      // the run of bar colour through its own centre, because the two outer bars are the same
+      // colour and a row holds both of them.
+      const row = rowOf(bar.y + bar.height - 2);
+      const isBar = x => awayFrom(pixel(x, row), bar.fill) < awayFrom(pixel(x, row), floor.fill);
+      let [first, last] = [columnOf(bar.x + bar.width / 2), columnOf(bar.x + bar.width / 2)];
+      while (first > 0 && isBar(first - 1)) first -= 1;
+      while (last < size - 1 && isBar(last + 1)) last += 1;
+      const left = Math.round((bar.x * size) / canvas);
+      const right = Math.round(((bar.x + bar.width) * size) / canvas) - 1;
+      if (!isBar(first) || Math.abs(left - first) > 1 || Math.abs(right - last) > 1) {
+        failures.push(`${label}: bar ${index + 1} paints columns ${isBar(first) ? `${first}-${last}` : 'nowhere'} where the mark puts it at ${left}-${right}`);
+      }
+    });
+
+    // The ground, in the two places no bar covers: between them, and beneath them all. The skirt
+    // keeps clear of the ground's own bottom corners, whose rounding is a shape rather than an
+    // edge — a pixel reaching into one of those is a blend and would measure as a blend.
+    pillars.slice(1).forEach((bar, index) => expectFill(
+      `the ground between bars ${index + 1} and ${index + 2}`,
+      [pillars[index].x + pillars[index].width, 0, bar.x, canvas],
+      floor.fill,
+    ));
+    expectFill('the ground below the bars', [
+      floor.x + floor.base,
+      pillars[0].y + pillars[0].height,
+      floor.x + floor.width - floor.base,
+      canvas,
+    ], floor.fill);
+
+    // The corner: transparent where the ground is rounded, and opaque where it is squared off for a
+    // platform that applies a corner mask of its own.
+    const wanted = floor.top ? 0 : 255;
+    const corner = pixel(0, 0)[3];
+    if (corner !== wanted) {
+      failures.push(`${label}: the corner's alpha is ${corner} where the ground's ${floor.top ? 'rounded' : 'squared'} corner makes it ${wanted}`);
+    }
+  };
+
+  const frames = readIco(icons.ico);
+  const measured = frames.map(frame => `${frame.size}px`).join(', ');
+  if (frames.map(frame => frame.size).join() !== sizes.ico.join()) {
+    failures.push(`${ICON_FILES.ico} carries ${measured} and a tab, a bookmarks bar and a shortcut ask it for ${sizes.ico.map(size => `${size}px`).join(', ')}`);
+  }
+  frames.forEach(frame => measure(`the ${frame.size}px frame of ${ICON_FILES.ico}`, frame, [ground, ...bars]));
+
+  const touch = readPng(icons.touch);
+  if (touch.width !== touch.height || touch.width !== sizes.touch) {
+    failures.push(`${ICON_FILES.touch} is ${touch.width}x${touch.height} where a home screen asks for ${sizes.touch}px square`);
+  }
+  // A home screen applies its own corner mask, so this one bleeds its ground to the edges and
+  // squares them — the same mark, with the ground's corners the one thing that differs.
+  measure(
+    `the home-screen icon ${ICON_FILES.touch}`,
+    { size: touch.width, pixels: touch.pixels },
+    [{ ...ground, top: 0, base: 0 }, ...bars],
+  );
+
+  if (failures.length) {
+    throw new Error(`The published icons are not the mark they are drawn from: ${failures.join('; ')} — what a browser shows is what these files contain, not what src/ meant by them`);
+  }
+  return frames.length + 1;
 }
 
 /**

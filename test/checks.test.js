@@ -14,7 +14,9 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import * as checks from '../src/checks.js';
 import * as seo from '../src/seo.js';
@@ -22,7 +24,7 @@ import { site, business, icons, runtime, faqs } from '../src/data.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-card.js';
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
-import { MAX_BYTES, servedPhotographs } from '../src/photos.js';
+import { MAX_BYTES, photographs, servedPhotographs } from '../src/photos.js';
 import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_CANVAS, ICON_FILES, ICON_LINKS, markShapes, readPalette } from '../src/favicon.js';
 import { draw, ico, png } from '../src/raster.js';
 
@@ -57,6 +59,41 @@ const mark = markShapes(readPalette());
  * agree with it, which is the shape of test that lets a rule quietly stop ruling.
  */
 const retiredHost = 'https://sgscrap.github.io';
+
+/**
+ * A WebP container made here rather than by the generator, at a chosen canvas and with however many
+ * feature chunks — which is the only way to put an alpha channel or an animation in front of a
+ * guard, since `npm run photos` writes neither.
+ */
+const webpContainer = (width, height, features = []) => {
+  const chunk = (type, payload) => {
+    const header = Buffer.alloc(8);
+    header.write(type, 0, 'latin1');
+    header.writeUInt32LE(payload.length, 4);
+    return Buffer.concat([header, payload, Buffer.alloc(payload.length % 2)]);
+  };
+  const canvas = Buffer.alloc(10);
+  canvas.writeUIntLE(width - 1, 4, 3);
+  canvas.writeUIntLE(height - 1, 7, 3);
+
+  const body = Buffer.concat([chunk('VP8X', canvas), ...features.map(feature => chunk(feature, Buffer.alloc(2)))]);
+  const riff = Buffer.alloc(8);
+  riff.write('RIFF', 0, 'latin1');
+  riff.writeUInt32LE(body.length + 4, 4);
+  return Buffer.concat([riff, Buffer.from('WEBP', 'latin1'), body]);
+};
+
+/** Runs `measure` against a file holding those bytes, and takes the file away afterwards. */
+const withSyntheticWebp = (bytes, measure) => {
+  const directory = mkdtempSync(join(tmpdir(), 'glam-derivative-'));
+  const path = join(directory, 'derivative.webp');
+  try {
+    writeFileSync(path, bytes);
+    return measure(path);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
 
 /**
  * A PNG with one text chunk and nothing else, so the reader can be exercised on structures the
@@ -181,6 +218,55 @@ const CASES = [
     rejects: [
       ['a photograph rented from a stock library', () => checks.assertImagesAreLocal('<img src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1300" alt="Somebody else&#39;s kitchen">'), /loads pictures from another site.*images\.unsplash\.com/],
       ['a protocol-relative URL', () => checks.assertImagesAreLocal('<img src="//cdn.test/room.png" alt="A room">'), /loads pictures from another site.*cdn\.test/],
+    ],
+  },
+  {
+    guard: 'assertPhotographsMatchTheirMasters',
+    accepts: [
+      {
+        why: 'the published derivatives against the photographs they come from',
+        run: () => checks.assertPhotographsMatchTheirMasters(servedPhotographs(), photographs()),
+        expect: count => assert.equal(count, servedPhotographs().length),
+      },
+      {
+        why: 'a derivative measured at the width it actually is',
+        run: () => checks.assertPhotographsMatchTheirMasters(
+          [{ path: 'assets/emely/emely-01-360.webp', width: 360, master: 'photos/emely/emely-01.png' }],
+          photographs(),
+        ),
+        expect: count => assert.equal(count, 1),
+      },
+    ],
+    rejects: [
+      ['a ladder step the file was never rendered at', () => checks.assertPhotographsMatchTheirMasters(
+        [{ path: 'assets/emely/emely-01-360.webp', width: 480, master: 'photos/emely/emely-01.png' }],
+        photographs(),
+      ), /assets\/emely\/emely-01-360\.webp is 360x513 and photos\/emely\/emely-01\.png at the ladder's 480px is 480x684/],
+      ['a master that is not the size src\/data.js declares', () => checks.assertPhotographsMatchTheirMasters(
+        servedPhotographs(),
+        photographs().map(photo => (photo.master.endsWith('emely-01.png') ? { ...photo, width: 640, height: 960 } : photo)),
+      ), /photos\/emely\/emely-01\.png is 587x837 on disk and src\/data\.js declares 640x960, so the page reserves the wrong box for it/],
+      ['a derivative that is not a WebP at all', () => checks.assertPhotographsMatchTheirMasters(
+        [{ path: 'photos/emely/emely-01.png', width: 587, master: 'photos/emely/emely-01.png' }],
+        photographs(),
+      ), /photos\/emely\/emely-01\.png is not a WebP: it begins/],
+      ['a ladder step that was never generated', () => checks.assertPhotographsMatchTheirMasters(
+        [{ path: 'assets/emely/emely-01-960.webp', width: 960, master: 'photos/emely/emely-01.png' }],
+        photographs(),
+      ), /assets\/emely\/emely-01-960\.webp is named by the pipeline and is not on disk/],
+      // The two shapes this pipeline never produces, made here as containers so the branches that
+      // refuse them are exercised at all: alpha, which the generator strips, and animation, which
+      // nothing here writes.
+      ['a derivative carrying an alpha channel', () => withSyntheticWebp(
+        webpContainer(360, 513, ['ALPH']),
+        path => checks.assertPhotographsMatchTheirMasters(
+          [{ path, width: 360, master: 'photos/emely/emely-01.png' }], photographs()),
+      ), /carries an alpha channel, and these photographs are opaque — convert to RGB before resizing/],
+      ['a derivative that is animated', () => withSyntheticWebp(
+        webpContainer(360, 513, ['ANIM']),
+        path => checks.assertPhotographsMatchTheirMasters(
+          [{ path, width: 360, master: 'photos/emely/emely-01.png' }], photographs()),
+      ), /is an animated WebP \(VP8X, ANIM\), and a page image is one frame/],
     ],
   },
   {

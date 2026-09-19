@@ -21,6 +21,7 @@ import {
   assertIconsMatchBrandMark,
   assertImagesAreLocal,
   assertKnownIcons,
+  assertPhotographsMatchTheirMasters,
   assertPhotographsWithinBudget,
   assertPublishedUrlsAgree,
   assertRecordPresent,
@@ -215,6 +216,12 @@ const pagePhotographs = assertImagesAreLocal(artifacts['index.html']);
 // missing from disk is a reference that does not ship, which the guard above has already thrown
 // on by name rather than as an unexplained ENOENT here.
 const servedVariants = servedPhotographs().map(({ path }) => ({ path, bytes: statSync(path).size }));
+
+// And what those derivatives are, from their own containers: the ladder's width at the master's
+// shape, opaque and single-frame. The generator runs outside the build, so these two are the only
+// things here that ever look at a photograph the build did not make.
+const measuredPhotographs = assertPhotographsMatchTheirMasters(servedPhotographs(), photographs());
+console.log(`photograph geometry  ${measuredPhotographs} derivatives at the ladder's width and their master's shape, opaque, one frame each`);
 const heaviest = assertPhotographsWithinBudget(servedVariants, MAX_BYTES);
 console.log(`photographs  ${pagePhotographs} in the page from ${photographs().length} masters, ${servedVariants.length} derivatives — heaviest ${heaviest.path} ${Math.round(heaviest.bytes / 1024)} KB of ${MAX_BYTES / 1024} KB`);
 

@@ -21,7 +21,9 @@ export const SOCIAL_CARD_PROVENANCE_KEYWORD = 'social-preview-source';
 
 /**
  * The copy and imagery baked into the card. `name` and `est` are uppercased by the renderer
- * for the eyebrow and footer marks, so they are stored as data.js holds them.
+ * for the eyebrow and footer marks, so they are stored as data.js holds them, and `portrait` is
+ * the master the card is rendered from rather than a file the page serves — the card is a
+ * separate asset at its own size, not a derivative of the page's pipeline.
  */
 export const socialCardSource = () => ({
   name: site.name,
@@ -29,5 +31,5 @@ export const socialCardSource = () => ({
   tagline: site.tagline,
   lead: hero.lead,
   accent: hero.accent,
-  portrait: team.portrait.src,
+  portrait: team.portrait.master,
 });

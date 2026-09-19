@@ -3,6 +3,7 @@ import {
   gallery, team, testimonials, faqs, booking, footer, hoursText,
 } from './data.js';
 import { esc } from './html.js';
+import { largestPath, srcset } from './photos.js';
 
 /* --- tiny helpers ------------------------------------------------------- */
 
@@ -34,8 +35,14 @@ const intro = section => `<div class="section-intro">
 <p>${esc(section.aside)}</p>
 </div>`;
 
-const img = ({ src, alt, width, height }, { lazy = true, high = false } = {}) =>
-  `<img src="${esc(src)}" alt="${esc(alt)}"${lazy ? ' loading="lazy"' : ''} width="${esc(width)}" height="${esc(height)}"${high ? ' fetchpriority="high"' : ''}>`;
+/**
+ * A photograph, at every width the pipeline generated for it. `src` is the widest candidate, so a
+ * browser that ignores srcset still gets the full one; `sizes` comes from the data because
+ * without it the browser assumes the image spans the viewport and fetches the widest file always,
+ * which is the download this pipeline exists to stop.
+ */
+const img = (photo, { lazy = true, high = false } = {}) =>
+  `<img src="${esc(largestPath(photo))}" srcset="${esc(srcset(photo))}" sizes="${esc(photo.sizes)}" alt="${esc(photo.alt)}"${lazy ? ' loading="lazy"' : ''} width="${esc(photo.width)}" height="${esc(photo.height)}"${high ? ' fetchpriority="high"' : ''}>`;
 
 /**
  * A portfolio cell. `photo` holds a photograph of a job this business did; while an entry has

@@ -14,7 +14,7 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 
 import * as checks from '../src/checks.js';
 import * as seo from '../src/seo.js';
@@ -22,6 +22,7 @@ import { site, business, icons, runtime, faqs } from '../src/data.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-card.js';
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
+import { MAX_BYTES, servedPhotographs } from '../src/photos.js';
 
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -29,7 +30,7 @@ const indexHtml = read('index.html');
 const stylesCss = read('styles.css');
 const partials = readdirSync(new URL('../src/styles', import.meta.url));
 const socialCard = readFileSync(new URL('../assets/social-preview.png', import.meta.url));
-const portrait = readFileSync(new URL('../assets/emely/emely-01.png', import.meta.url));
+const portrait = readFileSync(new URL('../photos/emely/emely-01.png', import.meta.url));
 const shipped = new Set(shippedFiles());
 const pageUrl = `${site.url}/`;
 
@@ -88,18 +89,24 @@ const CASES = [
         why: 'the real page and stylesheet',
         run: () => checks.referencedFiles({ html: indexHtml, css: stylesCss }, site),
         expect: found => {
-          for (const expected of ['styles.css', 'script.js', 'assets/emely/emely-01.png', site.socialImage.file]) {
+          for (const expected of ['styles.css', 'script.js', site.socialImage.file]) {
             assert.ok(found.has(expected), `expected the site to reference ${expected}`);
+          }
+          // Every candidate the browser can fetch counts, including the smaller ones only srcset
+          // names: a scan that read `src` alone would call them dead weight and never notice one
+          // that had been deleted.
+          for (const { path } of servedPhotographs()) {
+            assert.ok(found.has(path), `expected the srcset candidate ${path} to be a reference`);
           }
         },
       },
       {
-        why: 'src, href, stylesheet url() and site meta URLs',
+        why: 'src, srcset candidates, href, stylesheet url() and site meta URLs',
         run: () => checks.referencedFiles({
-          html: '<link rel=stylesheet href="styles.css"><script src="script.js?v=2"></script><img src="assets/a.png"><a href="#x">a</a><a href="tel:+1555">b</a><a href="https://elsewhere.test/p">c</a><meta property="og:image" content="https://site.test/app/assets/card.png"><meta property="og:image:alt" content="prose that is not a path"><link rel="canonical" href="https://site.test/app/">',
+          html: '<link rel=stylesheet href="styles.css"><script src="script.js?v=2"></script><img src="assets/a.png" srcset="assets/a-480.png 480w, assets/a-960.png 960w"><a href="#x">a</a><a href="tel:+1555">b</a><a href="https://elsewhere.test/p">c</a><meta property="og:image" content="https://site.test/app/assets/card.png"><meta property="og:image:alt" content="prose that is not a path"><link rel="canonical" href="https://site.test/app/">',
           css: `.a{background:url('assets/bg.png')} .b{background:url(assets/plain.png)} .c{background:url(https://cdn.test/f.woff2)}`,
         }, { url: 'https://site.test/app' }),
-        expect: found => assert.deepEqual([...found].sort(), ['assets/a.png', 'assets/bg.png', 'assets/card.png', 'assets/plain.png', 'script.js', 'styles.css']),
+        expect: found => assert.deepEqual([...found].sort(), ['assets/a-480.png', 'assets/a-960.png', 'assets/a.png', 'assets/bg.png', 'assets/card.png', 'assets/plain.png', 'script.js', 'styles.css']),
       },
       { why: 'a page with no references at all', run: () => checks.referencedFiles({ html: '' }, site), expect: found => assert.equal(found.size, 0) },
     ],
@@ -150,6 +157,29 @@ const CASES = [
     rejects: [
       ['a photograph rented from a stock library', () => checks.assertImagesAreLocal('<img src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1300" alt="Somebody else&#39;s kitchen">'), /loads pictures from another site.*images\.unsplash\.com/],
       ['a protocol-relative URL', () => checks.assertImagesAreLocal('<img src="//cdn.test/room.png" alt="A room">'), /loads pictures from another site.*cdn\.test/],
+    ],
+  },
+  {
+    guard: 'assertPhotographsWithinBudget',
+    accepts: [
+      {
+        why: 'the real derivatives against the real budget',
+        run: () => checks.assertPhotographsWithinBudget(
+          servedPhotographs().map(({ path }) => ({ path, bytes: statSync(new URL(`../${path}`, import.meta.url)).size })),
+          MAX_BYTES,
+        ),
+        expect: heaviest => assert.ok(heaviest.bytes > 0 && heaviest.bytes <= MAX_BYTES),
+      },
+      {
+        why: 'nothing to measure',
+        run: () => checks.assertPhotographsWithinBudget([], MAX_BYTES),
+        expect: heaviest => assert.equal(heaviest.bytes, 0),
+      },
+    ],
+    rejects: [
+      ['a photograph over the budget', () => checks.assertPhotographsWithinBudget([{ path: 'assets/emely/emely-01-587.webp', bytes: MAX_BYTES + 1 }], MAX_BYTES), /over the 120 KB budget: assets\/emely\/emely-01-587\.webp \(120 KB\)/],
+      ['the heaviest named first', () => checks.assertPhotographsWithinBudget([{ path: 'a.webp', bytes: MAX_BYTES + 1024 }, { path: 'b.webp', bytes: MAX_BYTES * 3 }], MAX_BYTES), /budget: b\.webp \(360 KB\), a\.webp \(121 KB\)/],
+      ['one over budget among several that fit', () => checks.assertPhotographsWithinBudget([{ path: 'a.webp', bytes: 10 }, { path: 'b.webp', bytes: MAX_BYTES * 2 }], MAX_BYTES), /budget: b\.webp \(240 KB\)/],
     ],
   },
   {
@@ -306,7 +336,7 @@ const CASES = [
     rejects: [
       ['copy that has moved on since the card was built', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), lead: 'Spotlessly yours.' }), /lead is now "Spotlessly yours.", the card was built from "Beautifully clean."/],
       ['a tagline the card never saw', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), tagline: 'Something else entirely.' }), /tagline is now/],
-      ['a portrait the card does not use', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), portrait: 'assets/emely/emely-03.png' }), /portrait is now "assets\/emely\/emely-03\.png"/],
+      ['a portrait the card does not use', () => checks.assertSocialCardMatchesCopy(socialCard, SOCIAL_CARD_PROVENANCE_KEYWORD, { ...socialCardSource(), portrait: 'photos/emely/emely-03.png' }), /portrait is now "photos\/emely\/emely-03\.png"/],
       ['a card with no provenance at all', () => checks.assertSocialCardMatchesCopy(portrait, SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /carries no provenance under "social-preview-source"/],
       ['a card whose provenance was stripped by an editor', () => checks.assertSocialCardMatchesCopy(Buffer.from(indexHtml), SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /Regenerate it: npm run social/],
       ['provenance that is not valid JSON', () => checks.assertSocialCardMatchesCopy(pngWithProvenance('{not json'), SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource()), /provenance is not valid JSON/],

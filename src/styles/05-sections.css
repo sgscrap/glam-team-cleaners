@@ -30,6 +30,14 @@
    Pricing
    ========================================================================== */
 .pricing { background: var(--linen); }
+/* The base rate, set above the plans and larger than them: the plans are examples of this
+   figure, so a visitor should meet the rate and its floor before any one tier price. */
+.pricing-rate { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 18px; margin: 0 0 30px; }
+.pricing-rate-main { display: flex; align-items: baseline; gap: 9px; }
+.pricing-rate strong { font: 600 34px/1 var(--serif); letter-spacing: -0.055em; color: var(--espresso); }
+.pricing-rate small { font: 9.5px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--taupe); }
+.pricing-rate-floor { font-size: 13px; color: var(--ink-soft); }
+.pricing-rate-floor strong { font-size: 20px; letter-spacing: -0.04em; }
 .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
 .price-card {
   position: relative;
@@ -123,19 +131,6 @@
 .team-portrait img { object-position: center 22%; }
 .portrait-note { position: absolute; bottom: 18px; left: 18px; color: #fff; font: 10px var(--mono); line-height: 1.4; letter-spacing: 0.08em; }
 .portrait-note span { color: var(--champagne); }
-
-/* ==========================================================================
-   Testimonials
-   ========================================================================== */
-.testimonial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.testimonial-card {
-  display: flex; flex-direction: column; gap: 22px; justify-content: space-between;
-  margin: 0; padding: 30px 28px;
-  background: var(--linen); border-radius: var(--radius-md);
-}
-.testimonial-card blockquote { margin: 0; font: italic 600 20px/1.35 var(--serif); letter-spacing: -0.03em; }
-.testimonial-card figcaption strong { display: block; font: 500 10px var(--mono); }
-.testimonial-card figcaption span { color: var(--taupe); font: 9.5px var(--mono); }
 
 /* ==========================================================================
    FAQ

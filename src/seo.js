@@ -44,7 +44,8 @@ export const structuredData = () => ({
   description: site.description,
   url: pageUrl,
   telephone: site.phone.href.replace(/^tel:/, ''),
-  email: site.email,
+  // No `email`: the business publishes no mailbox, and `assertBusinessFields` no longer asks
+  // for one — a rich result must not promise a channel the page does not offer.
   image: `${site.url}/${largestPath(hero.image)}`,
   slogan: site.tagline,
   foundingDate: String(site.founded),
@@ -55,9 +56,9 @@ export const structuredData = () => ({
     '@type': 'OfferCatalog',
     name: business.catalogName,
     /**
-     * Service names and descriptions only. Tier prices are omitted on purpose: the
-     * page states they are starting rates confirmed by quote, so publishing them as
-     * firm Offer prices would contradict the site.
+     * Service names and descriptions only. Prices are omitted on purpose: the page states
+     * a base rate with a minimum and calls the tier figures typical visits, both confirmed by
+     * quote, so publishing any of them as a firm Offer price would contradict the site.
      */
     itemListElement: services.items.map(service => ({
       '@type': 'Offer',

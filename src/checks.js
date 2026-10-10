@@ -22,11 +22,17 @@ export const SEARCH_LIMITS = [['title', 60], ['description', 160]];
  * construction, so a key dropped from the data would silently strip the consumer's labels
  * instead of failing the build.
  */
-export const RUNTIME_KEYS = ['menu', 'success', 'mail'];
+export const RUNTIME_KEYS = ['menu', 'success', 'handoff'];
 
-/** What a LocalBusiness rich result needs; whatever is absent is named in the failure. */
+/**
+ * What a LocalBusiness rich result needs; whatever is absent is named in the failure.
+ *
+ * `email` is deliberately not among them. The business publishes no mailbox, so requiring one
+ * would leave the choice between a fabricated address and a build that never passes — and a
+ * rich result advertising a dead address is worse than one without it.
+ */
 export const REQUIRED_BUSINESS_FIELDS = [
-  '@context', '@type', 'name', 'url', 'telephone', 'email', 'image', 'openingHours', 'hasOfferCatalog',
+  '@context', '@type', 'name', 'url', 'telephone', 'image', 'openingHours', 'hasOfferCatalog',
 ];
 
 /** Elements that never take a closing tag, so no `</x>` is expected for them. */

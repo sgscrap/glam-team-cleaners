@@ -7,9 +7,9 @@
  * cannot drift from the copy rendered into the page.
  */
 const config = JSON.parse(document.getElementById('runtime-config')?.textContent ?? 'null') ?? {};
-const mail = config.mail ?? {};
-const mailLabels = mail.labels ?? {};
-const mailFallback = mail.fallback ?? {};
+const handoff = config.handoff ?? {};
+const handoffLabels = handoff.labels ?? {};
+const handoffFallback = handoff.fallback ?? {};
 
 const header = document.querySelector('.site-header');
 const menuToggle = document.querySelector('.menu-toggle');
@@ -23,7 +23,7 @@ const resetButton = document.querySelector('.booking-reset');
 const callBar = document.querySelector('#mobile-cta');
 const bookingSection = document.querySelector('#book');
 
-const FORM_STATES = ['is-sending', 'is-sent', 'is-error'];
+const FORM_STATES = ['is-sending', 'is-sent', 'is-calling', 'is-error'];
 
 /** The success copy the page rendered, restored for the direct-send channel. */
 const renderedSuccess = successMessage?.textContent ?? '';
@@ -79,30 +79,44 @@ function setFormState(state) {
   if (state) bookingForm.classList.add(state);
 }
 
-/** The request as the recipient will read it. Labels and fallbacks come from data. */
+/**
+ * The request as the business will read it: the fields the form actually asks for, no email
+ * among them, with every label and fallback coming from data.
+ */
 function requestSummary() {
   const data = Object.fromEntries(new FormData(bookingForm).entries());
   const lines = [
-    `${mailLabels.name}: ${data.firstName} ${data.lastName || ''}`.trim(),
-    `${mailLabels.email}: ${data.email}`,
-    `${mailLabels.phone}: ${data.phone || mailFallback.phone}`,
-    `${mailLabels.service}: ${data.service}`,
-    `${mailLabels.date}: ${data.date}`,
-    `${mailLabels.time}: ${data.time || mailFallback.time}`,
+    `${handoffLabels.name}: ${data.firstName} ${data.lastName || ''}`.trim(),
+    `${handoffLabels.phone}: ${data.phone || handoffFallback.phone}`,
+    `${handoffLabels.service}: ${data.service}`,
+    `${handoffLabels.date}: ${data.date}`,
+    `${handoffLabels.time}: ${data.time || handoffFallback.time}`,
     '',
-    data.notes || mailFallback.notes,
+    data.notes || handoffFallback.notes,
   ];
   return { data, lines };
 }
 
+/**
+ * Three channels, in order. A configured endpoint posts the request; with none — this site has
+ * none, and publishes no mailbox either — the visitor's own phone is asked to carry it, as a
+ * message when the line is known to take one and as a call otherwise. The call is the default
+ * because a text to a line that cannot receive one vanishes without a word, which is the same
+ * silence this form was rebuilt to avoid.
+ *
+ * Either way the visitor sends it; the page never claims to have sent anything.
+ */
 async function deliver() {
   const { data, lines } = requestSummary();
   const endpoint = (bookingForm.dataset.endpoint || '').trim();
   if (!endpoint) {
-    const subject = encodeURIComponent(mail.subject ?? '');
-    const body = encodeURIComponent(lines.join('\n'));
-    window.location.href = `mailto:${bookingForm.dataset.email}?subject=${subject}&body=${body}`;
-    return 'email';
+    if (!handoff.text) {
+      window.location.href = `tel:${handoff.phone}`;
+      return 'call';
+    }
+    const body = encodeURIComponent([handoff.subject ?? '', ...lines].join('\n'));
+    window.location.href = `sms:${handoff.phone}?body=${body}`;
+    return 'text';
   }
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -119,11 +133,13 @@ bookingForm?.addEventListener('submit', async event => {
   if (submitButton) submitButton.disabled = true;
   try {
     const channel = await deliver();
-    bookingForm.reset();
+    // The call channel sends nothing, so the details stay where the visitor can read them out.
+    if (channel !== 'call') bookingForm.reset();
     if (successMessage) {
-      successMessage.textContent = channel === 'email' ? config.success?.email ?? renderedSuccess : renderedSuccess;
+      const copy = { call: config.success?.call, text: config.success?.text }[channel];
+      successMessage.textContent = copy ?? renderedSuccess;
     }
-    setFormState('is-sent');
+    setFormState(channel === 'call' ? 'is-calling' : 'is-sent');
     successMessage?.focus();
   } catch (error) {
     setFormState('is-error');

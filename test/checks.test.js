@@ -493,8 +493,8 @@ const CASES = [
     guard: 'assertRuntimeConfigKeys',
     accepts: [{ why: 'the real runtime config', run: () => checks.assertRuntimeConfigKeys(runtime) }],
     rejects: [
-      ['an island that was never emitted', () => checks.assertRuntimeConfigKeys(undefined), /missing what script\.js reads: menu, success, mail/],
-      ['an island missing one key', () => checks.assertRuntimeConfigKeys({ menu: {}, success: {} }), /missing what script\.js reads: mail/],
+      ['an island that was never emitted', () => checks.assertRuntimeConfigKeys(undefined), /missing what script\.js reads: menu, success, handoff/],
+      ['an island missing one key', () => checks.assertRuntimeConfigKeys({ menu: {}, success: {} }), /missing what script\.js reads: handoff/],
     ],
   },
   {

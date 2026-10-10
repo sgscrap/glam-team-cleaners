@@ -19,6 +19,9 @@
   box-shadow: var(--shadow-md);
 }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+/* A row holding a single field spans the form, so the phone — the only way to reply — is not
+   left sitting in half of it. */
+.field-row > :only-child { grid-column: 1 / -1; }
 .booking-form label { display: flex; flex-direction: column; gap: 7px; font: 500 10px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
 .booking-form input, .booking-form select, .booking-form textarea {
   width: 100%; padding: 9px 0 11px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
@@ -40,12 +43,15 @@
 /* Form state is owned by a single class on .booking-form */
 .form-success, .form-error, .booking-reset { display: none; }
 .booking-form.is-sent .form-fields { display: none; }
-.booking-form.is-sent .form-success {
+.booking-form.is-sent .form-success, .booking-form.is-calling .form-success {
   display: block; padding: 18px 20px;
   background: var(--champagne); color: var(--ink);
   font: 11.5px var(--mono); border-radius: var(--radius-sm);
 }
 .booking-form.is-sent .booking-reset { display: inline-block; }
+/* A call sends nothing, so the fields stay put: the visitor reads them out while they talk.
+   That is the whole reason this is a state of its own rather than another send. */
+.booking-form.is-calling .form-note { color: var(--ink-soft); }
 .booking-form.is-error .form-error { display: block; margin-top: 4px; color: var(--rose-deep); font: 11.5px var(--mono); }
 .booking-form.is-sending .booking-submit { opacity: 0.6; pointer-events: none; }
 

@@ -1,6 +1,6 @@
 import {
   site, nav, ui, cta, hero, trust, services, pricing, why, process,
-  gallery, team, testimonials, faqs, booking, footer, hoursText,
+  gallery, team, faqs, booking, footer, hoursText,
 } from './data.js';
 import { esc } from './html.js';
 import { largestPath, srcset } from './photos.js';
@@ -117,6 +117,7 @@ ${services.items.map((service, index) => `<article class="service-card">
 
 export const pricingSection = () => `<section class="pricing section-pad" id="pricing">
 ${intro(pricing)}
+<p class="pricing-rate"><span class="pricing-rate-main"><strong>${esc(pricing.rate.amount)}</strong><small>${esc(pricing.rate.unit)}</small></span> <span class="pricing-rate-floor">${esc(pricing.rate.floor.lead)} <strong>${esc(pricing.rate.floor.amount)}</strong> ${esc(pricing.rate.floor.tail)}</span></p>
 <div class="pricing-grid">
 ${pricing.tiers.map(tier => `<article class="price-card${tier.featured ? ' price-featured' : ''}">
 ${tier.badge ? `<span class="price-badge">${esc(tier.badge)}</span>\n` : ''}<span class="price-tier">${esc(tier.name)}</span>
@@ -169,17 +170,6 @@ ${img(team.portrait)}
 </div>
 </section>`;
 
-export const testimonialsSection = () => `<section class="testimonials section-pad" id="testimonials">
-${intro(testimonials)}
-<div class="testimonial-grid">
-${testimonials.items.map(item => `<figure class="testimonial-card">
-<blockquote>“${esc(item.quote)}”</blockquote>
-<figcaption><strong>${esc(item.name)}</strong><span>${esc(item.meta)}</span></figcaption>
-</figure>`).join('\n')}
-</div>
-<p class="placeholder-note">${esc(testimonials.note)}</p>
-</section>`;
-
 export const faqSection = () => `<section class="faq section-pad" id="faq">
 ${intro(faqs)}
 <div class="faq-list">
@@ -199,10 +189,9 @@ ${booking.points.map(point => `<li>${icon('check')}${esc(point)}</li>`).join('\n
 </ul>
 <div class="booking-contact">
 <a href="${esc(site.phone.href)}">${icon('phone')}${esc(site.phone.label)}</a>
-<a href="mailto:${esc(site.email)}">${esc(site.email)}</a>
 </div>
 </div>
-<form class="booking-form" id="booking-form" data-endpoint="" data-email="${esc(site.email)}">
+<form class="booking-form" id="booking-form" data-endpoint="">
 <div class="form-fields">
 ${booking.fields.map(group => `<div class="field-row">
 ${group.row.map(field).join('\n')}
@@ -235,7 +224,6 @@ ${nav.map(item => `<a href="${esc(item.href)}">${esc(item.label)}</a>`).join('\n
 <div class="footer-col">
 <h2>${esc(footer.contactTitle)}</h2>
 <a href="${esc(site.phone.href)}">${esc(site.phone.label)}</a>
-<a href="mailto:${esc(site.email)}">${esc(site.email)}</a>
 <a href="${esc(site.instagram)}" target="_blank" rel="noreferrer noopener">${esc(cta.instagram)}</a>
 <a href="#book">${esc(cta.requestQuote)}</a>
 </div>
@@ -260,6 +248,6 @@ export const mobileCta = () => `<div class="mobile-cta" id="mobile-cta">
 /** Page sections in document order. Adding or reordering a section happens here. */
 export const mainSections = [
   heroSection, trustStrip, servicesSection, pricingSection, whySection,
-  processSection, gallerySection, teamSection, testimonialsSection,
+  processSection, gallerySection, teamSection,
   faqSection, bookingSection,
 ];

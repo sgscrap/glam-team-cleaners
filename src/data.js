@@ -44,8 +44,23 @@ export const site = {
   announcement: 'Thoughtful cleaning for the spaces you call home',
   founded,
   est: `GTC / EST. ${founded}`,
-  phone: { label: '(667) 487-0858', href: 'tel:+16674870858' },
-  email: 'hello@glamteamcleaners.com',
+  phone: {
+    label: '(667) 487-0858',
+    href: 'tel:+16674870858',
+    /**
+     * Whether this line receives texts, which is what decides how the booking form hands a
+     * request over. It does not, as far as anyone here knows — a number nobody has confirmed can
+     * take a message is a number where a message disappears, and the visitor would never find
+     * out. So the form opens a call, and this is the switch that turns the text flow back on
+     * once someone has actually checked the line.
+     */
+    receivesText: false,
+  },
+  /**
+   * Deliberately absent: `email`. The business publishes no mailbox, and a request is answered by
+   * phone or not at all — so an address here would be a channel that does not exist. The booking
+   * form asks for no email either, and the structured data omits it, for the same reason.
+   */
   instagram: 'https://www.instagram.com/immaculatenesss/',
   year: 2024,
   city: 'your city',
@@ -143,15 +158,60 @@ export const trust = [
 ];
 
 /**
- * Services own the booking option label. Pricing tiers and service cards both
- * reference a service by id, so a card CTA and its <select> option can never drift.
+ * The rate every price on this page is computed from, and the floor under it.
+ *
+ * One number, plus the hours a typical job of each service takes, are the only inputs: change
+ * `perHour` and every figure moves with it — both the service cards and the plans that quote
+ * hours, the band above the plans, and the note beneath them. The alternative, which this page
+ * had until now, is six dollar amounts typed into two lists, where a rate change edits some and
+ * misses others and the page ends up quoting two different prices for the same job. No guard
+ * would catch that: the figures are copy, and copy is only ever compared with other copy.
+ */
+export const baseRate = {
+  perHour: 40,
+  /** The floor under the rate: nothing on this page is booked for less than this. */
+  minimum: 75,
+};
+
+/** A price in whole dollars — the site quotes dollars, never cents. */
+const dollars = amount => `$${Math.round(amount)}`;
+
+/**
+ * What a job of `hours` comes to: the base rate by the hour, and never less than the minimum — a
+ * job that would come to less than the floor costs the floor, which is what a floor is for.
+ *
+ * The minimum is applied here rather than only stated in the band, so the two cannot disagree:
+ * a service whose typical job is under an hour is quoted at the floor, not below the price the
+ * page promises is its lowest.
+ */
+const priceFor = hours => Math.max(hours * baseRate.perHour, baseRate.minimum);
+
+/**
+ * A service, with its card's figure computed from the base rate and the hours a typical job of it
+ * takes. `quoted` is the commercial work, priced by survey rather than by the hour, so it has no
+ * figure to compute.
+ */
+const withPrice = ({ hours, quoted, ...service }) => (quoted
+  ? { ...service, price: { quote: true } }
+  : { ...service, hours, price: { from: dollars(priceFor(hours)), unit: 'per visit' } });
+
+/**
+ * Services own the booking option label and the hours their typical job takes. Pricing tiers and
+ * service cards both reference a service by id, so a card CTA and its <select> option can never
+ * drift — and, because a plan takes its figure from the service it names, neither can quote a
+ * price the other doesn't.
  */
 export const services = {
   eyebrow: 'Our services',
   lead: 'Consider it',
   accent: 'taken care of.',
   aside: 'From a weekly reset to a full transformation, we make the details feel easy.',
-  priceLead: 'Starting at',
+  /**
+   * "Typically", not "Starting at": the one starting price on this page is the base rate in
+   * `pricing.rate`. A per-service figure presented as a floor beside a per-hour base would be a
+   * second, lower floor — the card price is an example of what the service usually comes to.
+   */
+  priceLead: 'Typically',
   priceQuote: { lead: 'Custom', accent: 'quote' },
   items: [
     {
@@ -159,69 +219,107 @@ export const services = {
       option: 'Regular cleaning',
       title: 'Regular cleaning',
       blurb: 'Reliable upkeep for a home that always feels ready for guests.',
-      price: { from: '$120', unit: 'per visit' },
+      hours: 3,
     },
     {
       id: 'deep',
       option: 'Deep cleaning',
       title: 'Deep cleaning',
       blurb: 'A considered top-to-bottom refresh for every overlooked corner.',
-      price: { from: '$220', unit: 'per visit' },
+      hours: 5.5,
     },
     {
       id: 'move',
       option: 'Move in / move out',
       title: 'Move in / move out',
       blurb: 'Start fresh, leave beautifully, and hand over a space with confidence.',
-      price: { from: '$280', unit: 'per visit' },
+      hours: 7,
     },
     {
       id: 'commercial',
       option: 'Office & commercial',
       title: 'Office & commercial',
       blurb: 'Polished, welcoming workspaces that help your team do its best work.',
-      price: { quote: true },
+      quoted: true,
     },
-  ],
+  ].map(withPrice),
 };
+
+/**
+ * The hours a service's typical job takes, by id — the one place a plan's figure comes from.
+ *
+ * A plan that names a service stating no hours is a build failure rather than a `$NaN` on a card:
+ * this runs while the module loads, long before any markup is rendered.
+ */
+const hoursOf = serviceId => {
+  const service = services.items.find(item => item.id === serviceId);
+  if (!service || service.hours === undefined) {
+    throw new Error(`The "${serviceId}" plan names a service with no hours to price: a plan costs the base rate times the hours its service states, so the two must name the same thing`);
+  }
+  return service.hours;
+};
+
+/**
+ * Plans, each with the figure the service it names comes to at the base rate.
+ *
+ * The amount is computed rather than typed, so the plan and the service card beside it cannot
+ * disagree — they are the same service, and the same sum. `serviceId` moves onto the CTA it
+ * belongs to, which is the only thing the renderer and the booking form read it for.
+ */
+const priced = plans => plans.map(({ serviceId, ...plan }) => ({
+  ...plan,
+  amount: dollars(priceFor(hoursOf(serviceId))),
+  unit: 'typical visit',
+  cta: { ...plan.cta, serviceId },
+}));
 
 export const pricing = {
   eyebrow: 'Simple pricing',
   lead: 'Clear rates.',
   accent: 'No surprises.',
-  aside: 'Starting rates for planning. We confirm your exact price once we know about your space.',
-  note: 'Starting rates shown are placeholders for planning and are confirmed by quote before booking.',
-  tiers: [
+  aside: 'Our base rate, and what three typical visits come to. We confirm your exact price once we know about your space.',
+  /**
+   * The band above the plans, built from `baseRate` rather than restating it.
+   *
+   * A base figure by the hour and a floor under it for the smallest job: that is the whole basis,
+   * and every other figure on this page is an example of what it comes to. Kept apart from the
+   * tiers so the one rate a visitor can hold the business to is not one of three cards, and so a
+   * plan can change without the rate moving.
+   */
+  rate: {
+    amount: dollars(baseRate.perHour),
+    unit: 'per hour',
+    floor: { lead: 'and at least', amount: dollars(baseRate.minimum), tail: 'for the smallest job' },
+  },
+  note: `Plans above show typical visits at the ${dollars(baseRate.perHour)} hourly rate. Nothing is booked for less than the ${dollars(baseRate.minimum)} minimum.`,
+  tiers: priced([
     {
       id: 'refresh',
       name: 'Refresh',
-      amount: '$120',
-      unit: 'from / per visit',
+      serviceId: 'regular',
       summary: 'Best for weekly or biweekly upkeep.',
       features: ['Kitchen & bathroom surfaces', 'Floors, dusting & tidy', 'Up to 2 bedrooms'],
-      cta: { label: 'Choose Refresh', serviceId: 'regular' },
+      cta: { label: 'Choose Refresh' },
     },
     {
       id: 'deep',
       name: 'Deep Reset',
-      amount: '$220',
-      unit: 'from / per visit',
+      serviceId: 'deep',
       summary: 'Our thorough top-to-bottom clean.',
       features: ['Everything in Refresh', 'Inside appliances & cabinets', 'Baseboards, vents & fixtures'],
       featured: true,
       badge: 'Most popular',
-      cta: { label: 'Choose Deep Reset', serviceId: 'deep' },
+      cta: { label: 'Choose Deep Reset' },
     },
     {
       id: 'move',
       name: 'Move In / Out',
-      amount: '$280',
-      unit: 'from / per visit',
+      serviceId: 'move',
       summary: 'Empty-home detail for moving day.',
       features: ['Everything in Deep Reset', 'Inside all closets & drawers', 'Final walkthrough together'],
-      cta: { label: 'Choose Move In / Out', serviceId: 'move' },
+      cta: { label: 'Choose Move In / Out' },
     },
-  ],
+  ]),
 };
 
 export const why = {
@@ -302,31 +400,15 @@ export const team = {
   },
 };
 
-export const testimonials = {
-  eyebrow: 'Kind words',
-  lead: 'What clients',
-  accent: 'tell us.',
-  aside: 'A few notes from the homes and businesses we look after.',
-  note: 'Testimonials shown are placeholder content for review.',
-  items: [
-    {
-      quote: 'The whole experience feels thoughtful — from the first message to the final sparkle.',
-      name: 'Jules M.',
-      meta: 'Regular client · 2 years',
-    },
-    {
-      quote: 'I came home and actually exhaled. Everything smelled fresh without being overpowering.',
-      name: 'Andrea P.',
-      meta: 'Deep clean · 1 year',
-    },
-    {
-      quote: 'Our office looks presentable for clients on Monday morning. That alone is worth it.',
-      name: 'Marcus T.',
-      meta: 'Commercial · 8 months',
-    },
-  ],
-};
-
+/**
+ * Deliberately absent: the testimonials section.
+ *
+ * The three quotes that stood here were written as placeholders, and a quote invented for a
+ * customer is the one thing on a page like this that no guard can catch — it reads exactly like
+ * a real one. Rather than dress them up, the section is off the page: `sections.js` renders no
+ * testimonials and `mainSections` does not list it, so nothing stands in for a customer's words.
+ * It comes back when there are real, attributable quotes to put in it, and not before.
+ */
 export const faqs = {
   eyebrow: 'Good to know',
   lead: 'Questions,',
@@ -371,14 +453,24 @@ export const booking = {
   fields: [
     { row: [{ name: 'firstName', label: 'First name', required: true, autocomplete: 'given-name', placeholder: 'Jane' },
             { name: 'lastName', label: 'Last name', autocomplete: 'family-name', placeholder: 'Doe' }] },
-    { row: [{ name: 'email', label: 'Email address', type: 'email', required: true, autocomplete: 'email', placeholder: 'jane@email.com' },
-            { name: 'phone', label: 'Phone number', type: 'tel', autocomplete: 'tel', placeholder: '(555) 123-4567' }] },
+    /**
+     * Phone only, and required: no mailbox is published, so this is the one channel a request can
+     * come back on. An email field here would be a field nothing could answer.
+     */
+    { row: [{ name: 'phone', label: 'Phone number', type: 'tel', required: true, autocomplete: 'tel', placeholder: '(555) 123-4567' }] },
   ],
   notes: { name: 'notes', label: 'Anything we should know?', placeholder: '2-bedroom apartment, one cat, focus on the kitchen...' },
-  submit: 'Send my request',
-  note: 'Placeholder contact details. No spam, ever.',
+  /**
+   * The button and the note describe what pressing it does, which is the channel `site.phone`
+   * selects: a call, or a text once the line is known to take one. A button that says "send"
+   * and opens a dialer is the same lie as a form that posts nowhere.
+   */
+  submit: site.phone.receivesText ? 'Send my request' : 'Call to book',
+  note: site.phone.receivesText
+    ? 'No spam — we use your details only to arrange your clean.'
+    : 'Nothing is sent from this page — call and we’ll take these details down.',
   success: 'Thank you — your request is in. We’ll reply within one business day.',
-  error: 'We couldn’t send your request just now. Please email hello@glamteamcleaners.com and we’ll take it from there.',
+  error: `We couldn’t send your request just now. Please call ${site.phone.label} and we’ll take it from there.`,
   reset: 'Book another clean',
 };
 
@@ -423,21 +515,40 @@ export const footer = {
 };
 
 /**
- * Strings the browser needs at runtime: menu labels, the email-channel confirmation, and
- * the labels used to compose the mailto request. script.js is a plain script with no
- * bundler, so it cannot import this module — the build serialises this block into the page
- * as a JSON island instead, which keeps the runtime from holding its own copy of the copy.
+ * Strings the browser needs at runtime: menu labels, the confirmation shown when a request is
+ * handed to the visitor's own messaging app, and the labels used to compose that message.
+ * script.js is a plain script with no bundler, so it cannot import this module — the build
+ * serialises this block into the page as a JSON island instead, which keeps the runtime from
+ * holding its own copy of the copy.
  */
 export const runtime = {
   menu: { open: ui.menuOpen, close: ui.menuClose },
   success: {
-    email: 'Your request is ready in your email app — press send and we’ll reply within one business day.',
+    /**
+     * Shown when the request left through the phone rather than a form endpoint: the visitor's
+     * messaging app holds the message, and the number is named in case their device cannot open
+     * a text — a desktop browser, most often.
+     */
+    text: `Your request is ready in your messages app — press send, and call ${site.phone.label} if it didn’t open.`,
+    /**
+     * Shown when the handoff is a call. Nothing was sent, so the copy says so and leaves the
+     * details the visitor filled in on screen to read out — which is why the form is not reset
+     * on this channel.
+     */
+    call: `Our number is opening in your phone app — call ${site.phone.label} and we’ll take these details down.`,
   },
-  mail: {
+  /**
+   * The phone channel. No mailbox is published and no form endpoint is configured, so the phone
+   * is the only way a request leaves this page — as a call unless the line takes texts.
+   */
+  handoff: {
+    /** Whether the number takes a message; see `site.phone.receivesText`. */
+    text: site.phone.receivesText,
     subject: 'Cleaning quote request',
+    /** Digits only, taken from the one place the number is written down. */
+    phone: site.phone.href.replace(/^tel:/, ''),
     labels: {
       name: 'Name',
-      email: 'Email',
       phone: 'Phone',
       service: 'Service',
       date: 'Preferred date',

@@ -8,13 +8,23 @@
 
 * text=auto
 
-index.html text eol=lf
+# `*.html` rather than `index.html`: the link page is generated at two paths, `/links/` and the
+# root of its own site, and both are compared byte for byte.
+*.html text eol=lf
 styles.css text eol=lf
 sitemap.xml text eol=lf
 robots.txt text eol=lf
 script.js text eol=lf
 src/** text eol=lf
 assets/favicon.svg text eol=lf
+
+# Generated text the drift check compares: the zone file and the second site's page.
+# Its PNG and ICO are binary and are deliberately not listed — a text rule would rewrite them.
+dns/*.zone text eol=lf
+links-site/index.html text eol=lf
+links-site/CNAME text eol=lf
+links-site/assets/*.svg text eol=lf
+deploy/** text eol=lf
 scripts/** text eol=lf
 .githooks/** text eol=lf
 .github/** text eol=lf

@@ -2,6 +2,9 @@
 
 The link-in-bio page, served at the root of its own subdomain.
 
+`DOMAIN.md` in the main repository is the whole sequence — records, the redirect, the deploy key,
+certificates and how to undo each step.
+
 Nothing here is written by hand. Every deploy of
 [sgscrap/glam-team-cleaners](https://github.com/sgscrap/glam-team-cleaners) copies the page it
 builds into this repository, so the subdomain follows the site within a minute — there is no

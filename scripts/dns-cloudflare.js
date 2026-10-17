@@ -56,6 +56,19 @@ function credentials() {
   return { token: values.CF_API_TOKEN, account: values.CF_ACCOUNT_ID };
 }
 
+/**
+ * A failed request ends the script with one line instead of a stack trace.
+ *
+ * The API calls are top-level awaits, so a rejection is an uncaught exception — and on Windows,
+ * tearing down while a socket is mid-close raises a libuv assertion on top of the real error, which
+ * buries the one message that says what Cloudflare objected to.
+ */
+process.on('uncaughtException', error => {
+  console.error(`\n✗ ${error.message}`);
+  console.error('  Nothing else was written. The writes are idempotent: fix the cause and re-run.\n');
+  process.exitCode = 1;
+});
+
 /** One request, with Cloudflare's own error list surfaced rather than a bare status. */
 async function api(path, { method = 'GET', body, token } = {}) {
   const response = await fetch(`${API}${path}`, {

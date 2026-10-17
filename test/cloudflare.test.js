@@ -18,6 +18,7 @@ import {
   dmarcRecords,
   mailRecords,
   obsoleteWebRecords,
+  redirectWrites,
   webRecords,
   withAliasRedirect,
 } from '../src/cloudflare.js';
@@ -92,6 +93,23 @@ test('the alias is a redirect, in the phase Cloudflare keeps them in', () => {
     preserve_query_string: true,
   }, '301 to the canonical page, with the query string kept so a tagged link still reports its source');
   assert.equal(LINKS_URL, 'https://glamcleaners.net/links/');
+});
+
+test('each of the two writes carries only what Cloudflare accepts', () => {
+  const writes = redirectWrites('zone-id', [aliasRedirectRule()]);
+
+  assert.equal(writes.read, '/zones/zone-id/rulesets/phases/http_request_dynamic_redirect/entrypoint');
+  assert.equal(writes.update.method, 'PUT');
+  assert.deepEqual(
+    Object.keys(writes.update.body),
+    ['rules'],
+    'a PUT must not carry the ruleset name or kind: Cloudflare refuses those on an update',
+  );
+  assert.equal(writes.create.method, 'POST');
+  assert.equal(writes.create.path, '/zones/zone-id/rulesets');
+  assert.equal(writes.create.body.kind, 'zone', 'a ruleset that does not exist yet is created with its type');
+  assert.equal(writes.create.body.phase, REDIRECT_PHASE);
+  assert.deepEqual(writes.create.body.rules, [aliasRedirectRule()]);
 });
 
 test('installing the redirect keeps every other rule, and is safe to re-run', () => {

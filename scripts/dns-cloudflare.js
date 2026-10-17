@@ -30,12 +30,12 @@ import { homedir } from 'node:os';
 import { resolveMx, resolveTxt } from 'node:dns/promises';
 import { HOST, LINK_HOST } from '../src/dns.js';
 import {
-  REDIRECT_PHASE,
   aliasRedirectRule,
   dmarcRecords,
   mailRecords,
   obsoleteWebRecords,
   recordKey,
+  redirectWrites,
   webRecords,
   withAliasRedirect,
 } from '../src/cloudflare.js';
@@ -79,7 +79,10 @@ const { token, account } = credentials();
 
 if (!token || !account) {
   console.error('\n✗ No Cloudflare credentials.');
-  console.error('  Create an API token with Zone:Edit for the account, then either export');
+  console.error('  Create an API token for the account with these permissions:');
+  console.error('    Zone → DNS → Edit                 (the records)');
+  console.error('    Zone → Dynamic Redirect → Edit    (the redirect rule)');
+  console.error('  then either export');
   console.error('  CF_API_TOKEN and CF_ACCOUNT_ID, or write them into ~/.cloudflare-zone.env:');
   console.error('      CF_API_TOKEN=...');
   console.error('      CF_ACCOUNT_ID=...');
@@ -175,29 +178,19 @@ if (extras.length) {
 // Installed after the records, because the rule is only useful on a name whose record is proxied,
 // and flipping that first would proxy the alias to a site that still answers with the page. If this
 // fails, the zone is left exactly as it was: the records are right and the alias still serves.
-const entrypoint = `/zones/${zone.id}/rulesets/phases/${REDIRECT_PHASE}/entrypoint`;
+const shape = redirectWrites(zone.id, []);
 let ruleset = null;
 try {
-  ruleset = await api(entrypoint, { token });
+  ruleset = await api(shape.read, { token });
 } catch (error) {
-  // No entrypoint yet: the PUT below creates it on first write, and the POST is the fallback for
-  // an account where that is not allowed.
+  // No entry point in that phase yet on this zone: the create call below is the other shape.
   if (!/404/.test(error.message)) throw error;
 }
 
-const body = {
-  name: `Zone-level ${REDIRECT_PHASE}`,
-  kind: 'zone',
-  phase: REDIRECT_PHASE,
-  rules: withAliasRedirect(ruleset?.rules ?? [], redirect),
-};
-
-try {
-  await api(entrypoint, { method: 'PUT', token, body });
-} catch (error) {
-  if (!/404/.test(error.message)) throw error;
-  await api(`/zones/${zone.id}/rulesets`, { method: 'POST', token, body });
-}
+// Every rule already in the phase goes back with ours, because the write replaces the whole list.
+const call = ruleset ? shape.update : shape.create;
+const rules = withAliasRedirect(ruleset?.rules ?? [], redirect);
+await api(call.path, { method: call.method, token, body: { ...call.body, rules } });
 
 const kept = (ruleset?.rules ?? []).filter(rule => rule.description !== redirect.description).length;
 console.log(`\nredirect  ${redirect.expression} → ${from.status_code} ${from.target_url.value}${kept ? ` (${kept} other rule(s) left in place)` : ''}`);

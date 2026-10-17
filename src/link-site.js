@@ -15,6 +15,8 @@
  * — but it is not part of `src/ship.js`, so it is never uploaded to the main site. The README and
  * workflow that belong to the second repository live in `deploy/links-site/`.
  */
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { LINK_HOST } from './dns.js';
 import { ICON_FILES } from './favicon.js';
 import { linksHtml } from './links.js';
@@ -33,6 +35,57 @@ export const LINK_SITE_CNAME = `${LINK_SITE_DIR}/CNAME`;
  * the same bytes the main site ships, and building them twice would be two drawings that could
  * disagree.
  */
+/**
+ * Every file the second site publishes, as a path relative to that repository's root. Read from
+ * disk rather than from `linkSiteFiles` because the publisher runs in CI against the committed
+ * build, where the icons are already files — and because what is pushed should be what `npm run
+ * check` verified, byte for byte, not a second rendering of it.
+ */
+export const linkSitePublished = root => {
+  const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry =>
+    entry.isDirectory() ? walk(join(directory, entry.name)) : [join(directory, entry.name)]);
+  return walk(root).map(path => relative(root, path).split('\\').join('/')).sort();
+};
+
+/**
+ * Copy the built site into a checkout of the repository that publishes it, then say what changed.
+ *
+ * A checkout rather than an API call: the workflow pushes one commit, so the second site keeps a
+ * history that says what its page said and when — and a push of the same bytes writes no commit at
+ * all. Everything already in that repository that is not one of these files is left alone; the
+ * README is the only such file today, and it is not this function's to overwrite.
+ */
+export const publishLinkSite = (checkout, { root = LINK_SITE_DIR } = {}) => {
+  const written = [];
+  const unchanged = [];
+
+  for (const path of linkSitePublished(root)) {
+    const source = readFileSync(join(root, path));
+    const destination = join(checkout, path);
+    let existing = null;
+    try {
+      existing = readFileSync(destination);
+    } catch {
+      // Not there yet: the first publish of a file is not a change to compare against.
+    }
+    if (existing && existing.equals(source)) {
+      unchanged.push(path);
+      continue;
+    }
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(join(root, path), destination);
+    written.push(path);
+  }
+
+  // Files at the root that the site does not produce: reported, never deleted. A stray page on a
+  // public site is worth seeing in a workflow log, but it is not this script's to remove.
+  const ours = new Set(linkSitePublished(root));
+  const stale = readdirSync(checkout)
+    .filter(entry => statSync(join(checkout, entry)).isFile() && !ours.has(entry));
+
+  return { written, unchanged, stale };
+};
+
 export const linkSiteFiles = icons => ({
   [`${LINK_SITE_DIR}/index.html`]: linksHtml({ canonical: LINK_SITE_URL, prefix: '' }),
   [LINK_SITE_CNAME]: `${LINK_HOST}\n`,

@@ -55,3 +55,49 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # The link page has a Pages site of its own — a Pages site holds one custom domain — so
+  # links.glamcleaners.net is a second repository. Publishing it from here is what keeps it from
+  # lagging the site: the same deploy that publishes the page copies it there, and the commit
+  # that results is what Pages builds. A deploy that changed nothing upstream writes no commit.
+  links:
+    name: Publish the link page subdomain
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # A deploy key, added to that repository with write access: the token this workflow runs on
+      # is scoped to this repository and cannot push to another one.
+      - name: Check out the repository that serves the subdomain
+        env:
+          LINKS_DEPLOY_KEY: ${{ secrets.LINKS_DEPLOY_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$LINKS_DEPLOY_KEY" > ~/.ssh/links
+          chmod 600 ~/.ssh/links
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/links -o IdentitiesOnly=yes" \
+            git clone git@github.com:sgscrap/glam-links.git links-repo
+
+      - name: Copy the built page in
+        run: node scripts/publish-links-site.js links-repo
+
+      - name: Commit and push, if anything changed
+        working-directory: links-repo
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "the subdomain page is unchanged"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "Publish the link page from ${SOURCE_COMMIT:0:7}"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/links -o IdentitiesOnly=yes" git push origin HEAD:main

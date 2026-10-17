@@ -12,12 +12,21 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LINK_HOST } from '../src/dns.js';
 import { ICON_FILES } from '../src/favicon.js';
 import { LINKS_FILE, linksHtml } from '../src/links.js';
-import { LINK_SITE_CNAME, LINK_SITE_DIR, LINK_SITE_URL, linkSiteFiles } from '../src/link-site.js';
+import {
+  LINK_SITE_CNAME,
+  LINK_SITE_DIR,
+  LINK_SITE_URL,
+  linkSiteFiles,
+  linkSitePublished,
+  publishLinkSite,
+} from '../src/link-site.js';
 import { site } from '../src/data.js';
 
 /** A path from the repository root, resolved from this file so the suite is cwd-independent. */
@@ -72,6 +81,36 @@ test('the committed second site is what the generator emits', () => {
       readFileSync(at(path)).equals(Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8')),
       `regen: npm run build — ${path} is generated from src/link-site.js`,
     );
+  }
+});
+
+test('publishing copies every file and leaves the rest of the repository alone', () => {
+  const checkout = mkdtempSync(join(tmpdir(), 'glam-links-'));
+  try {
+    writeFileSync(join(checkout, 'README.md'), '# glam-links\n');
+
+    const first = publishLinkSite(checkout);
+    assert.deepEqual(
+      [...first.written].sort(),
+      linkSitePublished(LINK_SITE_DIR),
+      'every file the subdomain serves is written, and no other',
+    );
+    for (const path of first.written) {
+      assert.ok(
+        readFileSync(join(checkout, path)).equals(readFileSync(at(join(LINK_SITE_DIR, path)))),
+        `${path} arrives byte for byte`,
+      );
+    }
+    assert.equal(readFileSync(join(checkout, 'README.md'), 'utf8'), '# glam-links\n', 'the README is not this site\'s to overwrite');
+
+    // The property that makes an instant rebuild cheap: a deploy that changed nothing upstream
+    // writes no commit, so pushing the page twice is not two commits saying the same thing.
+    const second = publishLinkSite(checkout);
+    assert.deepEqual(second.written, []);
+    assert.deepEqual([...second.unchanged].sort(), linkSitePublished(LINK_SITE_DIR));
+    assert.deepEqual(second.stale, ['README.md']);
+  } finally {
+    rmSync(checkout, { recursive: true, force: true });
   }
 });
 

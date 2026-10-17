@@ -34,6 +34,9 @@
 ;   ...and the DKIM records the current panel holds, which cannot be read from
 ;   outside it. As observed 2026-10-17 — copy them from the panel, not
 ;   from this comment.
+;
+; The whole sequence, in order, with the commands and the rollback: DOMAIN.md
+; in the repository root.
 ; ==========================================================================
 
 $ORIGIN glamcleaners.net.

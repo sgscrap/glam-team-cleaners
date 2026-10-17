@@ -112,6 +112,9 @@ ${MAIL_RECORDS.map(record => `;   ${record}`).join('\n')}
 ;   ...and the DKIM records the current panel holds, which cannot be read from
 ;   outside it. As observed ${MAIL_OBSERVED_ON} — copy them from the panel, not
 ;   from this comment.
+;
+; The whole sequence, in order, with the commands and the rollback: DOMAIN.md
+; in the repository root.
 ; ==========================================================================
 
 $ORIGIN ${HOST}.

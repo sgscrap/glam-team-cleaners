@@ -59,6 +59,28 @@ export const aliasRedirectRule = () => ({
 });
 
 /**
+ * The calls that install those rules, as values rather than as requests made inline.
+ *
+ * Two ways, and the difference matters: Cloudflare will not accept a ruleset's name or kind on an
+ * update — "you cannot update the name of the ruleset or its type" — while a ruleset that does not
+ * exist yet must be created with both. Sending the wrong one of these is a 400 in the middle of a
+ * migration, so both bodies are pinned by tests.
+ */
+export const redirectWrites = (zoneId, rules) => ({
+  read: `/zones/${zoneId}/rulesets/phases/${REDIRECT_PHASE}/entrypoint`,
+  update: {
+    method: 'PUT',
+    path: `/zones/${zoneId}/rulesets/phases/${REDIRECT_PHASE}/entrypoint`,
+    body: { rules },
+  },
+  create: {
+    method: 'POST',
+    path: `/zones/${zoneId}/rulesets`,
+    body: { name: `Zone-level ${REDIRECT_PHASE}`, kind: 'zone', phase: REDIRECT_PHASE, rules },
+  },
+});
+
+/**
  * The rules the entrypoint should hold: this rule in place of any earlier copy of it, and every
  * other rule exactly as it was. Cloudflare replaces the whole list on write, so a rule somebody
  * else added to the same phase would be deleted by a naive PUT.

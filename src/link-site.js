@@ -8,8 +8,19 @@
  *
  * What is *not* duplicated is the page. The markup, the copy and every channel are built by
  * src/links.js from src/data.js, so the subdomain and `/links/` cannot quote different numbers, and
- * the only differences here are the two things that must differ: the address it calls itself, and
- * the fact that its icons sit beside it instead of one directory up.
+ * the only difference here is the one that must exist: its icons sit beside it instead of one
+ * directory up.
+ *
+ * One page on two addresses, and only one of them may be indexed. The canonical is the apex path —
+ * `https://glamcleaners.net/links/` — on both copies, because that is where the site's own links,
+ * its sitemap and its structured data already point, so authority stays on the one host a search
+ * engine has a property for. The subdomain keeps working as a short address a bio can hold, and
+ * nothing about it is indexed twice: a page that canonicals elsewhere is the consolidation, not a
+ * duplicate. The check in src/build.js holds both copies to that one URL.
+ *
+ * A hard redirect from the subdomain would consolidate further still — no second copy to fetch at
+ * all — and becomes possible once the zone is on Cloudflare, where a redirect rule can answer for
+ * it. Until then the alias serves the page, which is also what keeps it useful.
  *
  * `links-site/` is committed like every other generated artifact — `npm run check` holds it to src/
  * — but it is not part of `src/ship.js`, so it is never uploaded to the main site. The README and
@@ -19,7 +30,7 @@ import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync } from 'no
 import { dirname, join, relative } from 'node:path';
 import { LINK_HOST } from './dns.js';
 import { ICON_FILES } from './favicon.js';
-import { linksHtml } from './links.js';
+import { LINKS_URL, linksHtml } from './links.js';
 
 /** Where the second site is published, and the hostname it must answer on. */
 export const LINK_SITE_URL = `https://${LINK_HOST}/`;
@@ -87,7 +98,9 @@ export const publishLinkSite = (checkout, { root = LINK_SITE_DIR } = {}) => {
 };
 
 export const linkSiteFiles = icons => ({
-  [`${LINK_SITE_DIR}/index.html`]: linksHtml({ canonical: LINK_SITE_URL, prefix: '' }),
+  // `canonical: LINKS_URL` rather than `LINK_SITE_URL`: the subdomain is the alias, and a second
+  // self-canonical link page is exactly the duplicate this file exists to prevent.
+  [`${LINK_SITE_DIR}/index.html`]: linksHtml({ canonical: LINKS_URL, prefix: '' }),
   [LINK_SITE_CNAME]: `${LINK_HOST}\n`,
   [`${LINK_SITE_DIR}/${ICON_FILES.ico}`]: icons[ICON_FILES.ico],
   [`${LINK_SITE_DIR}/${ICON_FILES.svg}`]: icons[ICON_FILES.svg],

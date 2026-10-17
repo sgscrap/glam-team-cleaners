@@ -214,6 +214,9 @@ const probe = url => new Promise((resolve, reject) => {
   socket.setTimeout(20000, () => socket.destroy(new Error('no answer within 20s')));
 });
 
+/** What each address says it is, read from the page it served. */
+const declared = new Map();
+
 for (const { url, file } of PAGES) {
   const local = readFileSync(file);
   let response;
@@ -244,6 +247,8 @@ for (const { url, file } of PAGES) {
   }
 
   const served = response.chunked ? dechunk(response.body) : response.body;
+  const canonical = /<link rel="canonical" href="([^"]+)"/.exec(served.toString('utf8'))?.[1];
+  if (canonical) declared.set(url, canonical);
   if (served.equals(local)) {
     pass(`HTTP ${url} serves ${file} byte for byte (${digest(served)})`);
   } else {
@@ -251,6 +256,24 @@ for (const { url, file } of PAGES) {
       `HTTP ${url} serves something else (${served.length} bytes, ${digest(served)}, where ${file} is ${local.length}, ${digest(local)})`,
       'what is live is not this checkout, so a canonical or a contact detail could be stale',
     );
+  }
+}
+
+/* --- one page, one address ------------------------------------------------ */
+
+/**
+ * The link page is served twice — at `/links/` and at the bare subdomain — and only one of them
+ * may be indexed. Both copies name the same canonical, so a search engine that finds either files
+ * the page under one address. If they ever disagree, the two addresses compete with each other.
+ * Checked only when both served: an unreachable address has already been reported above.
+ */
+const linkAddresses = [`${site.url}/links/`, LINK_SITE_URL];
+const named = linkAddresses.map(url => declared.get(url));
+if (named.every(Boolean)) {
+  if (named[0] === named[1]) {
+    pass(`canonical  both link addresses name ${named[0]}`);
+  } else {
+    fail(`canonical  ${named[0]} and ${named[1]}`, 'the two addresses must name one page, or search engines index two');
   }
 }
 

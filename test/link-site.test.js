@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LINK_HOST } from '../src/dns.js';
 import { ICON_FILES } from '../src/favicon.js';
-import { LINKS_FILE, linksHtml } from '../src/links.js';
+import { LINKS_FILE, LINKS_URL, linksHtml } from '../src/links.js';
 import {
   LINK_SITE_CNAME,
   LINK_SITE_DIR,
@@ -46,9 +46,13 @@ const body = html => html.slice(html.indexOf('<main class="card">'));
 /** The one thing the body is allowed to spell differently: where its logo is. */
 const withOneLogoPath = html => body(html).replace('src="../apple-touch-icon.png"', 'src="apple-touch-icon.png"');
 
-test('the subdomain is the same page, under its own address', () => {
-  assert.match(page, new RegExp(`<link rel="canonical" href="${LINK_SITE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">`));
-  assert.match(page, new RegExp(`<meta property="og:url" content="${LINK_SITE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">`));
+test('the subdomain is the same page, canonicalised to the one address', () => {
+  // One page, two addresses, one of them indexed. The apex path is the canonical because the site's
+  // own links, sitemap and structured data already point there; the subdomain is the short form.
+  assert.match(page, /<link rel="canonical" href="https:\/\/glamcleaners\.net\/links\/">/);
+  assert.match(page, /<meta property="og:url" content="https:\/\/glamcleaners\.net\/links\/">/);
+  assert.equal(LINKS_URL, 'https://glamcleaners.net/links/');
+  assert.equal(page.includes(LINK_SITE_URL), false, 'the alias does not advertise itself as a second page');
   assert.equal(linksHtml().includes(LINK_SITE_URL), false, 'the /links/ copy must not claim the subdomain');
   assert.equal(
     withOneLogoPath(page),

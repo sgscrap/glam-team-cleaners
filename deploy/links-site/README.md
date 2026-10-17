@@ -22,8 +22,21 @@ site, and a Pages site lives in a repository.
 | `CNAME` | `links.glamcleaners.net` — Pages reads the custom domain from this file |
 | `favicon.ico`, `assets/favicon.svg`, `apple-touch-icon.png` | The same icons the main site ships |
 
-The page's canonical and `og:url` name the subdomain; everything below the head — the number, the
-mailbox, the channels, the hours — is the same source as `/links/` on the main site.
+## Two addresses, one page
+
+The link page is served at this subdomain **and** at `https://glamcleaners.net/links/`. Only the
+second one is indexed: both copies carry
+`<link rel="canonical" href="https://glamcleaners.net/links/">`, because that is where the main
+site's own links, sitemap and structured data point, so authority stays on the one host a search
+engine has a property for.
+
+That makes this subdomain an alias — short enough to put in a bio, and not a second page for a
+crawler to index. `npm run check` in the main repository fails if the two copies ever name different
+canonicals. Once the domain's DNS is on Cloudflare, a redirect rule from this host to `/links/`
+would consolidate further still; until then the alias serves the page directly, with no hop.
+
+Everything below the head — the number, the mailbox, the channels, the hours — is the same source
+as `/links/` on the main site.
 
 ## Pages settings
 

@@ -12,6 +12,7 @@
     "photos": "python3 scripts/photos.py && python3 scripts/verify-photos.py",
     "photos:verify": "python3 scripts/verify-photos.py",
     "domain": "node scripts/verify-domain.js",
+    "dns:cloudflare": "node scripts/dns-cloudflare.js",
     "icons:verify": "python3 scripts/verify-icons.py",
     "stage": "node scripts/stage.js",
     "hooks:install": "node scripts/install-hooks.js",

@@ -1,0 +1,68 @@
+name: Publish the link page
+
+# links.glamcleaners.net is a Pages site of its own, because a Pages site holds one custom domain
+# and GitHub lists an apex plus a subdomain as unsupported. This repository holds no page: it
+# publishes the one the main repository builds, so the two addresses cannot drift apart.
+#
+# The build reads a public repository, so it needs no secret. It runs on a schedule as well as on
+# demand, because a change to the main repository cannot trigger a workflow here with the default
+# token — a push to main rebuilds this site within a day. To make it immediate, add a token with
+# `repo` scope to the main repository and fire `repository_dispatch` at this one on deploy.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Not on the hour: GitHub's scheduler queues at :00 and runs late.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [links-page]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish links.glamcleaners.net
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # The page, its copy and its channels are all built from the main repository's src/. Nothing
+      # is committed here, so there is no second copy of the business's details to fall out of date.
+      - uses: actions/checkout@v4
+        with:
+          repository: sgscrap/glam-team-cleaners
+          path: source
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No dependencies to install: the build is node built-ins only.
+      - name: Build from the one source
+        working-directory: source
+        run: npm run build
+
+      - name: Refuse to publish a page that disagrees with its source
+        working-directory: source
+        run: npm run check
+
+      # Pages must be enabled for this repository with Source: GitHub Actions.
+      - uses: actions/configure-pages@v6
+
+      # `links-site/` is the subdomain's root: index.html, CNAME, and the icons beside them.
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: source/links-site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,12 +1,15 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { site, icons, runtime, ui, business, links } from './data.js';
+import { HOST, PAGES_A, PAGES_AAAA } from './dns.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from './social-card.js';
 import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
-import { LINKS_FILE, LINKS_ICON_LINKS, linksHtml } from './links.js';
+import { LINKS_FILE, LINKS_ICON_LINKS, linksHtml, linksIconLinks } from './links.js';
+import { LINK_SITE_DIR, LINK_SITE_URL, linkSiteFiles } from './link-site.js';
+import { ZONE_FILE, zoneFile } from './dns.js';
 import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_FILES, ICON_LINKS, iconFiles } from './favicon.js';
 import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
@@ -164,16 +167,28 @@ function buildStyles() {
 
 const builtPage = buildPage();
 
+// Drawn once: the link page's second publication ships the same icon bytes, and two drawings of
+// the mark could disagree with each other.
+const iconArtifacts = iconFiles();
+
 const artifacts = {
   'index.html': builtPage,
   [LINKS_FILE]: buildLinksPage(links.items.length),
   'styles.css': buildStyles(),
   [seo.SITEMAP_FILE]: seo.sitemap(),
   [seo.ROBOTS_FILE]: seo.robots(),
+  // Not a published file: the records the domain needs, so the change at the DNS provider is a
+  // copy-paste. Generated like everything else, so it cannot drift from the addresses the
+  // domain check compares against.
+  [ZONE_FILE]: zoneFile(),
   // The icons are generated here rather than by a script of their own, so the check below covers
   // them like every other generated file: a committed icon that no longer matches the stylesheet
   // tokens is stale output, not a judgement call.
-  ...iconFiles(),
+  ...iconArtifacts,
+  // The same page as a site of its own, for links.glamcleaners.net. Generated and drift-checked
+  // here so it cannot fall behind src/, but deliberately absent from src/ship.js: it belongs to
+  // the second repository, never to this site's upload.
+  ...linkSiteFiles(iconArtifacts),
 };
 
 // The canonicals read back out of the pages that were just built, rather than the list of pages
@@ -187,6 +202,7 @@ assertPublishedUrlsAgree({
 }, site);
 const listedPages = assertSitemapListsEveryPage({ sitemap: artifacts[seo.SITEMAP_FILE], pages: canonicals });
 console.log(`sitemap  ${listedPages} pages listed, each one a canonical this build emitted`);
+console.log(`dns  ${ZONE_FILE}  ${PAGES_A.length + PAGES_AAAA.length + 2} records for ${HOST} and ${LINK_SITE_URL.replace('https://', '').replace(/\/$/, '')}`);
 
 // Only now that every file a crawler reads exists: the guard reads all of each one, not just the
 // canonical line, so a retired host in the share card's absolute URL is caught here too.
@@ -215,6 +231,18 @@ const publishedSummary = unreferenced.length
   ? `${unreferenced.length} referenced by nothing (${Math.round(unreferencedBytes / 1024)} KB): ${unreferenced.join(', ')}`
   : 'every file referenced';
 console.log(`published set  ${shipped.size} files — ${referenceCount} references, all ship; ${publishedSummary}`);
+
+// The second site is its own root, so the files its page names are read out of the set *it*
+// publishes rather than this site's: an icon path left behind from the `/links/` copy — one
+// directory up, where this site has nothing — would be a 404 on a phone and a green build here.
+const linkSite = linkSiteFiles(iconArtifacts);
+const linkSitePaths = new Set(Object.keys(linkSite).map(path => path.slice(LINK_SITE_DIR.length + 1)));
+const linkSiteRefs = assertReferencesShip(
+  referencedFiles({ html: artifacts[`${LINK_SITE_DIR}/index.html`] }, { url: LINK_SITE_URL }),
+  linkSitePaths,
+);
+assertIconsDeclared(artifacts[`${LINK_SITE_DIR}/index.html`], linksIconLinks(''));
+console.log(`links site  ${linkSitePaths.size} files, ${linkSiteRefs} references, none of them leaving it`);
 
 // The icons the page declares, checked against the paths just published. Both directions matter:
 // an icon nothing declares is a file a client will never ask for by that name, and a declaration

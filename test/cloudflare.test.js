@@ -10,8 +10,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { HOST, PAGES_DOMAIN, ZONE_FILE } from '../src/dns.js';
-import { dmarcRecords, mailRecords, obsoleteWebRecords, webRecords } from '../src/cloudflare.js';
+import { HOST, LINK_HOST, PAGES_DOMAIN, ZONE_FILE } from '../src/dns.js';
+import { LINKS_URL } from '../src/links.js';
+import {
+  REDIRECT_PHASE,
+  aliasRedirectRule,
+  dmarcRecords,
+  mailRecords,
+  obsoleteWebRecords,
+  webRecords,
+  withAliasRedirect,
+} from '../src/cloudflare.js';
 
 const records = webRecords();
 const addressable = records.filter(record => record.type === 'A' || record.type === 'AAAA');
@@ -68,6 +77,33 @@ test('the move removes the forward, the wildcard, and nothing else', () => {
     ['1', '2'],
     'the forwarder and the wildcard go; a mail host, MX and TXT records stay',
   );
+});
+
+test('the alias is a redirect, in the phase Cloudflare keeps them in', () => {
+  assert.equal(REDIRECT_PHASE, 'http_request_dynamic_redirect');
+  const rule = aliasRedirectRule();
+
+  assert.equal(rule.action, 'redirect');
+  assert.equal(rule.enabled, true);
+  assert.equal(rule.expression, `(http.host eq "${LINK_HOST}")`, 'the rule fires on the alias host and nothing else');
+  assert.deepEqual(rule.action_parameters.from_value, {
+    target_url: { value: LINKS_URL },
+    status_code: 301,
+    preserve_query_string: true,
+  }, '301 to the canonical page, with the query string kept so a tagged link still reports its source');
+  assert.equal(LINKS_URL, 'https://glamcleaners.net/links/');
+});
+
+test('installing the redirect keeps every other rule, and is safe to re-run', () => {
+  const someoneElse = { description: 'Send /old to /new', action: 'redirect' };
+  const first = withAliasRedirect([someoneElse]);
+  assert.equal(first.length, 2, 'a rule this script did not write is not thrown away by the write');
+  assert.ok(first.includes(someoneElse));
+
+  // Cloudflare replaces the whole rule list on write, so a second run must not append a duplicate.
+  const second = withAliasRedirect(first);
+  assert.deepEqual(second, first);
+  assert.equal(second.filter(rule => rule.description === aliasRedirectRule().description).length, 1);
 });
 
 test('mail moves with the domain', () => {

@@ -32,8 +32,14 @@ engine has a property for.
 
 That makes this subdomain an alias — short enough to put in a bio, and not a second page for a
 crawler to index. `npm run check` in the main repository fails if the two copies ever name different
-canonicals. Once the domain's DNS is on Cloudflare, a redirect rule from this host to `/links/`
-would consolidate further still; until then the alias serves the page directly, with no hop.
+canonicals.
+
+Once the zone is on Cloudflare, `npm run dns:cloudflare` replaces that alias with a **301 to
+`/links/`**, and this Pages site stops receiving traffic through the subdomain: the request is
+answered at the edge and never reaches here. Its one DNS record is proxied for that to work, while
+the apex and `www` stay DNS-only so GitHub can issue their certificates. The page built here stays
+in the repository as what the address serves if the rule is ever removed, and `npm run domain`
+reports which of the two the alias is doing.
 
 Everything below the head — the number, the mailbox, the channels, the hours — is the same source
 as `/links/` on the main site.

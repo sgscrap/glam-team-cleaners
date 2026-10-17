@@ -7,7 +7,7 @@ import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
-import { LINKS_FILE, LINKS_ICON_LINKS, linksHtml, linksIconLinks } from './links.js';
+import { LINKS_FILE, LINKS_ICON_LINKS, LINKS_URL, linksHtml, linksIconLinks } from './links.js';
 import { LINK_SITE_DIR, LINK_SITE_URL, linkSiteFiles } from './link-site.js';
 import { ZONE_FILE, zoneFile } from './dns.js';
 import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_FILES, ICON_LINKS, iconFiles } from './favicon.js';
@@ -194,6 +194,17 @@ const artifacts = {
 // The canonicals read back out of the pages that were just built, rather than the list of pages
 // somebody meant to build: that is what makes the sitemap check two-sided.
 const canonicals = ['index.html', LINKS_FILE].map(file => between(artifacts[file], '<link rel="canonical" href="', '"')[0]);
+
+// Two addresses serve the link page and only one of them may be indexed. Both copies name the
+// apex path, so this is the guard that keeps the subdomain from quietly becoming a second page: a
+// self-canonical there would be a duplicate in every search engine's index, and nothing else in
+// the build would notice.
+const linkCanonicals = [LINKS_FILE, `${LINK_SITE_DIR}/index.html`]
+  .map(file => between(artifacts[file], '<link rel="canonical" href="', '"')[0]);
+if (linkCanonicals.some(url => url !== LINKS_URL)) {
+  throw new Error(`The link page must name ${LINKS_URL} from both addresses; the copies name ${linkCanonicals.join(' and ')}`);
+}
+console.log(`links page  ${LINKS_URL} from both addresses — one indexed, one short to share`);
 
 assertPublishedUrlsAgree({
   html: artifacts['index.html'],

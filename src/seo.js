@@ -1,4 +1,5 @@
 import { site, business, hero, services, footer, openingHours, faqs } from './data.js';
+import { LINKS_URL } from './links.js';
 import { ICON_LINKS } from './favicon.js';
 import { esc, jsonBlock, GENERATED_NOTE } from './html.js';
 import { largestPath } from './photos.js';
@@ -41,11 +42,14 @@ export const structuredData = () => ({
   '@type': business.type,
   '@id': `${pageUrl}#business`,
   name: site.name,
+  legalName: business.legalName,
   description: site.description,
   url: pageUrl,
   telephone: site.phone.href.replace(/^tel:/, ''),
-  // No `email`: the business publishes no mailbox, and `assertBusinessFields` no longer asks
-  // for one — a rich result must not promise a channel the page does not offer.
+  // The address the business actually reads, taken from the mailto the page links to — a record
+  // that advertises a mailbox the page does not offer sends a would-be customer to an address
+  // nobody chose.
+  email: site.email.label,
   image: `${site.url}/${largestPath(hero.image)}`,
   slogan: site.tagline,
   foundingDate: String(site.founded),
@@ -126,17 +130,25 @@ ${jsonBlock('application/ld+json', faqPage())}
 <link rel="stylesheet" href="styles.css">`;
 
 /**
- * The sitemap. One page, so one <loc> — anchors are not separate URLs and listing them
- * would be noise. `lastmod` is deliberately absent: there is no honest date to publish,
+ * Every page this site publishes, in the order the sitemap lists them.
+ *
+ * Two, and both are real documents: the homepage, and the link-in-bio page a bio points at. An
+ * anchor is not a page and is never listed. The build hands the canonicals it actually emitted
+ * to `assertSitemapListsEveryPage`, so this list and the sitemap below cannot drift unnoticed —
+ * a page left out is a page a crawler never learns about, and a <loc> for a page that was never
+ * built is a 404 advertised in the one file search engines trust.
+ */
+export const PAGE_URLS = [pageUrl, LINKS_URL];
+
+/**
+ * The sitemap. `lastmod` is deliberately absent: there is no honest date to publish,
  * inventing one would make the file differ on every build (the drift check compares
  * bytes), and Google ignores a lastmod it cannot verify.
  */
 export const sitemap = () => `<?xml version="1.0" encoding="UTF-8"?>
 <!-- ${GENERATED_NOTE} -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url>
-<loc>${esc(pageUrl)}</loc>
-</url>
+${PAGE_URLS.map(url => `<url>\n<loc>${esc(url)}</loc>\n</url>`).join('\n')}
 </urlset>
 `;
 

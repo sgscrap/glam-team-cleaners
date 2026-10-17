@@ -7,6 +7,10 @@
 .booking-points li { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .booking-points .icon { width: 16px; height: 16px; color: var(--rose-deep); }
 .booking-contact { display: flex; flex-direction: column; gap: 8px; font: 11px var(--mono); }
+/* Who picks up, above the two ways of reaching her: the card names a person, and an unnamed
+   number reads as a call centre. */
+.contact-person { margin-bottom: 2px; color: var(--ink); font: 600 13px var(--sans); letter-spacing: -0.01em; }
+.contact-person span { margin-left: 5px; color: var(--rose-deep); font-size: 12px; }
 .booking-contact a { display: inline-flex; align-items: center; gap: 8px; }
 .booking-contact a:hover { color: var(--rose-deep); }
 

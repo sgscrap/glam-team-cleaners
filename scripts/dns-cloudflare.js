@@ -28,8 +28,17 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolveMx, resolveTxt } from 'node:dns/promises';
-import { HOST } from '../src/dns.js';
-import { dmarcRecords, mailRecords, obsoleteWebRecords, recordKey, webRecords } from '../src/cloudflare.js';
+import { HOST, LINK_HOST } from '../src/dns.js';
+import {
+  REDIRECT_PHASE,
+  aliasRedirectRule,
+  dmarcRecords,
+  mailRecords,
+  obsoleteWebRecords,
+  recordKey,
+  webRecords,
+  withAliasRedirect,
+} from '../src/cloudflare.js';
 
 const API = 'https://api.cloudflare.com/client/v4';
 const APPLY = process.argv.includes('--apply');
@@ -89,7 +98,14 @@ const desired = [...webRecords(), ...mailRecords(mx, apexTxt), ...dmarcRecords(d
 console.log(`\n${HOST}: ${desired.length} records for the move to Cloudflare\n`);
 console.log(describe(desired));
 console.log('\n  no DKIM record is published at any usual selector, so none is copied;');
-console.log('  if the mailbox signs outbound mail with its own key, add that TXT here before the switch.\n');
+console.log('  if the mailbox signs outbound mail with its own key, add that TXT here before the switch.');
+
+const redirect = aliasRedirectRule();
+const { from_value: from } = redirect.action_parameters;
+console.log(`\nAnd ${LINK_HOST} stops being a second copy of the page — this rule, in the zone:`);
+console.log(`  when ${redirect.expression}`);
+console.log(`  then ${from.status_code} → ${from.target_url.value}${from.preserve_query_string ? ' (query string preserved)' : ''}`);
+console.log('  which also turns that one DNS record orange: Cloudflare sees no traffic for a grey name.\n');
 
 if (!APPLY) {
   console.log('Dry run. Re-run with --apply to create the zone and write these records.\n');
@@ -152,6 +168,54 @@ const extras = current.filter(record => !wanted.has(recordKey(record)) && !obsol
 if (extras.length) {
   console.log('\nLeft alone — not part of this move:');
   console.log(describe(extras));
+}
+
+/* --- the alias, as a redirect --------------------------------------------- */
+
+// Installed after the records, because the rule is only useful on a name whose record is proxied,
+// and flipping that first would proxy the alias to a site that still answers with the page. If this
+// fails, the zone is left exactly as it was: the records are right and the alias still serves.
+const entrypoint = `/zones/${zone.id}/rulesets/phases/${REDIRECT_PHASE}/entrypoint`;
+let ruleset = null;
+try {
+  ruleset = await api(entrypoint, { token });
+} catch (error) {
+  // No entrypoint yet: the PUT below creates it on first write, and the POST is the fallback for
+  // an account where that is not allowed.
+  if (!/404/.test(error.message)) throw error;
+}
+
+const body = {
+  name: `Zone-level ${REDIRECT_PHASE}`,
+  kind: 'zone',
+  phase: REDIRECT_PHASE,
+  rules: withAliasRedirect(ruleset?.rules ?? [], redirect),
+};
+
+try {
+  await api(entrypoint, { method: 'PUT', token, body });
+} catch (error) {
+  if (!/404/.test(error.message)) throw error;
+  await api(`/zones/${zone.id}/rulesets`, { method: 'POST', token, body });
+}
+
+const kept = (ruleset?.rules ?? []).filter(rule => rule.description !== redirect.description).length;
+console.log(`\nredirect  ${redirect.expression} → ${from.status_code} ${from.target_url.value}${kept ? ` (${kept} other rule(s) left in place)` : ''}`);
+
+// And the record that carries the traffic. Only this one: the apex and www must stay DNS-only for
+// GitHub to issue their certificates.
+const after = await api(`/zones/${zone.id}/dns_records?per_page=100`, { token });
+const alias = after.find(record => record.type === 'CNAME' && record.name === LINK_HOST);
+if (alias && alias.proxied !== true) {
+  await api(`/zones/${zone.id}/dns_records/${alias.id}`, {
+    method: 'PATCH',
+    token,
+    body: { proxied: true, ttl: 1 },
+  });
+  console.log(`~ CNAME ${LINK_HOST}  DNS only → proxied, so the redirect can answer for it`);
+}
+if (!alias) {
+  console.error(`! No CNAME for ${LINK_HOST} in the zone, so the redirect has nothing to answer on.`);
 }
 
 console.log('\nNext: point the registrar at Cloudflare. Nameservers to set at DomainRegistry.com:');

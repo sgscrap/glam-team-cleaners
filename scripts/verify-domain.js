@@ -33,17 +33,18 @@ import { resolve4, resolve6, resolveCname } from 'node:dns/promises';
 import { site } from '../src/data.js';
 import { HOST, LINK_HOST, PAGES_A, PAGES_AAAA, PAGES_DOMAIN, ZONE_FILE } from '../src/dns.js';
 import { LINK_SITE_URL } from '../src/link-site.js';
+import { LINKS_URL } from '../src/links.js';
 
 /**
- * The pages this build emits, as the address each must answer on and the file holding it. Two
- * hosts, because the link page is served twice: at `/links/` on the site, and at the root of its
- * own Pages site. Both are compared byte for byte — a subdomain that shows an older copy of the
- * page is the failure this list exists to make visible.
+ * The pages this build emits, as the address each must answer on and the file holding it. Both are
+ * compared byte for byte — a stale deployment also answers 200, so the bytes are the check.
+ *
+ * The subdomain is not in this list: it is the alias for the second of these pages, and it is asked
+ * a different question below — whether it redirects here, or serves the same bytes.
  */
 const PAGES = [
   { url: `${site.url}/`, file: 'index.html' },
   { url: `${site.url}/links/`, file: 'links/index.html' },
-  { url: LINK_SITE_URL, file: 'links-site/index.html' },
 ];
 
 const host = HOST;
@@ -259,22 +260,52 @@ for (const { url, file } of PAGES) {
   }
 }
 
-/* --- one page, one address ------------------------------------------------ */
+/* --- the alias ------------------------------------------------------------ */
 
 /**
- * The link page is served twice — at `/links/` and at the bare subdomain — and only one of them
- * may be indexed. Both copies name the same canonical, so a search engine that finds either files
- * the page under one address. If they ever disagree, the two addresses compete with each other.
- * Checked only when both served: an unreachable address has already been reported above.
+ * The link page answers on two addresses and there are two honest answers at the second one.
+ *
+ * The intended one is a 301 to the canonical page: the alias then reaches no second copy at all,
+ * which is what "one address" means at its strongest, and it is what the Cloudflare redirect rule
+ * in `npm run dns:cloudflare` installs. Until the zone is on Cloudflare, the second Pages site
+ * serves the page itself — acceptable, because that copy names the canonical page, but reported,
+ * since a second copy is exactly the thing a canonical only mitigates.
  */
-const linkAddresses = [`${site.url}/links/`, LINK_SITE_URL];
-const named = linkAddresses.map(url => declared.get(url));
-if (named.every(Boolean)) {
-  if (named[0] === named[1]) {
-    pass(`canonical  both link addresses name ${named[0]}`);
+const aliasPage = readFileSync('links-site/index.html');
+const canonicalFor = url => declared.get(url);
+
+try {
+  const response = await probe(LINK_SITE_URL);
+  const target = (response.location ?? '').replace(/\/$/, '');
+  const wanted = LINKS_URL.replace(/\/$/, '');
+
+  if (!Number.isFinite(response.status)) {
+    // The same provider that answers the apex with something that is not an HTTP response.
+    fail(`alias  ${LINK_SITE_URL}`, 'the host answered with bytes that are not an HTTP response at all');
+  } else if (response.status >= 300 && response.status < 400) {
+    if (target === wanted) {
+      pass(`alias  ${LINK_HOST} → ${response.status} ${response.location}`);
+    } else {
+      fail(`alias  ${LINK_HOST} → ${response.status} ${response.location ?? ''}`, `it should redirect to ${LINKS_URL}`);
+    }
+  } else if (response.status === 200) {
+    const served = response.chunked ? dechunk(response.body) : response.body;
+    const aliasCanonical = /<link rel="canonical" href="([^"]+)"/.exec(served.toString('utf8'))?.[1];
+    if (!served.equals(aliasPage)) {
+      fail(`alias  ${LINK_SITE_URL} serves something else (${served.length} bytes)`, 'neither the page nor a redirect to it');
+    } else if (aliasCanonical && aliasCanonical === canonicalFor(`${site.url}/links/`)) {
+      notes.push(`${LINK_HOST} still serves the page and names ${aliasCanonical} — the redirect rule would remove that second copy`);
+    } else {
+      fail(
+        `canonical  ${LINK_HOST} names ${aliasCanonical ?? 'nothing'}`,
+        `both addresses must name ${LINKS_URL}, or redirect to it`,
+      );
+    }
   } else {
-    fail(`canonical  ${named[0]} and ${named[1]}`, 'the two addresses must name one page, or search engines index two');
+    fail(`alias  ${LINK_SITE_URL} → ${response.status}`, 'the alias must redirect to the canonical page, or serve it');
   }
+} catch (error) {
+  fail(`alias  ${LINK_SITE_URL}`, `the request failed: ${error.message}`);
 }
 
 /* --- the verdict --------------------------------------------------------- */
@@ -292,9 +323,9 @@ if (failures.length) {
   console.error(`     CNAME  links ${PAGES_DOMAIN}`);
   console.error('');
   console.error('  The forward is the part that rewrites every path, which is why /links/ lands on');
-  console.error('  the homepage instead of the page a bio would point at. The links CNAME is the');
-  console.error('  second Pages site: without it the wildcard keeps answering and the subdomain');
-  console.error('  shows the homepage.');
+  console.error('  the homepage instead of the page a bio would point at. Links is its own name:');
+  console.error('  today a second Pages site, and once the zone is on Cloudflare a redirect to');
+  console.error('  the canonical page instead — npm run dns:cloudflare installs both halves.');
   console.error('');
   console.error('  Once DNS answers, attaching the domain is one call — GitHub then issues the');
   console.error('  certificate, and the default Pages address starts redirecting here:');

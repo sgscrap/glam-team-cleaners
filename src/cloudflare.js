@@ -6,7 +6,8 @@
  * network, or the chance of writing to a real zone: the script is the only thing that talks to
  * the API, and everything it decides is decided here.
  */
-import { HOST, PAGES_A, PAGES_AAAA, PAGES_DOMAIN } from './dns.js';
+import { HOST, LINK_HOST, PAGES_A, PAGES_AAAA, PAGES_DOMAIN } from './dns.js';
+import { LINKS_URL } from './links.js';
 
 /** Auto TTL: Cloudflare's own default, and one less number to keep in step. */
 const AUTO = 1;
@@ -24,6 +25,47 @@ export const webRecords = () => [
   ...PAGES_AAAA.map(content => ({ type: 'AAAA', name: HOST, content, proxied: false, ttl: AUTO })),
   { type: 'CNAME', name: `www.${HOST}`, content: PAGES_DOMAIN, proxied: false, ttl: AUTO },
   { type: 'CNAME', name: `links.${HOST}`, content: PAGES_DOMAIN, proxied: false, ttl: AUTO },
+];
+
+/**
+ * The phase Cloudflare keeps Single Redirect rules in. Spelled here rather than in the script so
+ * the rule and the request that carries it cannot disagree.
+ */
+export const REDIRECT_PHASE = 'http_request_dynamic_redirect';
+
+/**
+ * The redirect that removes the second copy of the link page.
+ *
+ * The subdomain and `/links/` served the same page, and only a canonical tag said which one
+ * mattered. A 301 says it at the only layer that can: a request to the alias never reaches a copy
+ * at all, and the query string rides along so a tagged link still reports where it came from.
+ *
+ * Cloudflare only sees traffic for a name whose DNS record is proxied, so installing this rule is
+ * what makes that one record orange — the apex and `www` stay grey, because GitHub has to answer
+ * for them to issue their certificates.
+ */
+export const aliasRedirectRule = () => ({
+  description: `Send ${LINK_HOST} to the link page's canonical address`,
+  expression: `(http.host eq "${LINK_HOST}")`,
+  action: 'redirect',
+  action_parameters: {
+    from_value: {
+      target_url: { value: LINKS_URL },
+      status_code: 301,
+      preserve_query_string: true,
+    },
+  },
+  enabled: true,
+});
+
+/**
+ * The rules the entrypoint should hold: this rule in place of any earlier copy of it, and every
+ * other rule exactly as it was. Cloudflare replaces the whole list on write, so a rule somebody
+ * else added to the same phase would be deleted by a naive PUT.
+ */
+export const withAliasRedirect = (rules = [], rule = aliasRedirectRule()) => [
+  ...rules.filter(existing => existing.description !== rule.description),
+  rule,
 ];
 
 /**

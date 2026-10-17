@@ -24,6 +24,7 @@ import { site, business, icons, runtime, faqs } from '../src/data.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-card.js';
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
+import { linksHtml } from '../src/links.js';
 import { MAX_BYTES, photographs, servedPhotographs } from '../src/photos.js';
 import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_CANVAS, ICON_FILES, ICON_LINKS, markShapes, readPalette } from '../src/favicon.js';
 import { draw, ico, png } from '../src/raster.js';
@@ -168,6 +169,19 @@ const CASES = [
           css: `.a{background:url('assets/bg.png')} .b{background:url(assets/plain.png)} .c{background:url(https://cdn.test/f.woff2)}`,
         }, { url: 'https://site.test/app' }),
         expect: found => assert.deepEqual([...found].sort(), ['assets/a-480.png', 'assets/a-960.png', 'assets/a.png', 'assets/bg.png', 'assets/card.png', 'assets/plain.png', 'script.js', 'styles.css']),
+      },
+      {
+        why: 'a page published from a subdirectory, with its icons and the site named absolutely',
+        run: () => checks.referencedFiles({
+          html: '<link rel="icon" href="../favicon.ico"><a href="https://site.test/app/#book">b</a><meta property="og:image" content="https://site.test/app/assets/card.png">',
+          base: 'links/',
+        }, { url: 'https://site.test/app' }),
+        expect: found => assert.deepEqual([...found].sort(), ['assets/card.png', 'favicon.ico']),
+      },
+      {
+        why: 'a link to a directory, which is that directory\u2019s index.html',
+        run: () => checks.referencedFiles({ html: '<a href="links/">x</a>' }, site),
+        expect: found => assert.deepEqual([...found], ['links/index.html']),
       },
       { why: 'a page with no references at all', run: () => checks.referencedFiles({ html: '' }, site), expect: found => assert.equal(found.size, 0) },
     ],
@@ -316,6 +330,40 @@ const CASES = [
       ['a hook that reaches into node_modules', () => checks.assertHookNeedsNoInstall('#!/bin/sh\nnode_modules/.bin/prettier --check .'), /reaches into node_modules/],
       ['a hook reduced to exiting clean', () => checks.assertHookNeedsNoInstall('#!/bin/sh\nexit 0'), /runs no node script/],
       ['an empty hook file', () => checks.assertHookNeedsNoInstall(''), /runs no node script/],
+    ],
+  },
+  {
+    guard: 'assertEmail',
+    accepts: [{ why: 'the address printed on the business card', run: () => checks.assertEmail(site) }],
+    rejects: [
+      ['a link that opens a draft to a different address', () => checks.assertEmail({ email: { ...site.email, href: 'mailto:someone@else.test' } }), /must be mailto:<the address printed on the page>/],
+      ['a label that is not an address', () => checks.assertEmail({ email: { label: 'glamteamcleaners', href: 'mailto:glamteamcleaners' } }), /is not an address/],
+      ['a link with no mailto scheme', () => checks.assertEmail({ email: { label: site.email.label, href: site.email.label } }), /must be mailto:<the address printed on the page>/],
+    ],
+  },
+  {
+    guard: 'assertSitemapListsEveryPage',
+    accepts: [
+      {
+        why: 'the real sitemap against the pages this build emits',
+        run: () => checks.assertSitemapListsEveryPage({ sitemap: seo.sitemap(), pages: seo.PAGE_URLS }),
+        expect: count => assert.equal(count, seo.PAGE_URLS.length),
+      },
+    ],
+    rejects: [
+      ['a page the sitemap never lists', () => checks.assertSitemapListsEveryPage({ sitemap: seo.sitemap(), pages: [...seo.PAGE_URLS, `${site.url}/thanks/`] }), /omits published pages, so a crawler has to find them by luck/],
+      ['a <loc> for a page that was never built', () => checks.assertSitemapListsEveryPage({ sitemap: seo.sitemap().replace('</urlset>', `<url><loc>${site.url}/old/</loc></url>\n</urlset>`), pages: seo.PAGE_URLS }), /advertises pages this build did not emit/],
+    ],
+  },
+  {
+    guard: 'assertLinksPageHasEveryChannel',
+    accepts: [
+      { why: 'the published links page', run: () => checks.assertLinksPageHasEveryChannel(read('links/index.html'), site), expect: count => assert.equal(count, 4) },
+    ],
+    rejects: [
+      ['a page that lost the phone number', () => checks.assertLinksPageHasEveryChannel(linksHtml().replace(`href="${site.phone.href}"`, 'href="#"'), site), /does not carry the phone number/],
+      ['a page that lost the mailbox', () => checks.assertLinksPageHasEveryChannel(linksHtml().replace(`href="${site.email.href}"`, 'href="#"'), site), /does not carry the mailbox/],
+      ['a page that stopped pointing at booking', () => checks.assertLinksPageHasEveryChannel(linksHtml().replace(`${site.url}/#book`, `${site.url}/`), site), /does not carry the booking anchor/],
     ],
   },
   {
@@ -487,6 +535,7 @@ const CASES = [
     rejects: [
       ['a record missing most of what a rich result needs', () => checks.assertBusinessFields({ '@type': 'LocalBusiness', name: 'x' }), /LocalBusiness structured data is missing: /],
       ['a record whose fields are present but empty', () => checks.assertBusinessFields({ ...businessRecord, telephone: '' }), /missing: telephone/],
+      ['a record that leaves out the mailbox the page publishes', () => checks.assertBusinessFields({ ...businessRecord, email: undefined }), /missing: email/],
     ],
   },
   {
@@ -550,6 +599,7 @@ const CASES = [
       ['the retired host in the canonical link', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
       ['the retired host in a sitemap <loc>', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap().replace(pageUrl, `${retiredHost}/glam-team-cleaners/`), robots: seo.robots() }), /sitemap\.xml/],
       ['the retired host in the Sitemap line of robots.txt', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots().replace(seo.sitemapUrl, `${retiredHost}/glam-team-cleaners/${seo.SITEMAP_FILE}`) }), /robots\.txt/],
+      ['the retired host in a second page\u2019s canonical', () => checks.assertRetiredHostsAbsent({ html: indexHtml, sitemap: seo.sitemap(), robots: seo.robots(), pages: { 'links/index.html': `<link rel="canonical" href="${retiredHost}/glam-team-cleaners/links/">` } }), /links\/index\.html/],
       ['the retired host only in the share card URL', () => checks.assertRetiredHostsAbsent({ html: indexHtml.replace(`<meta property="og:image" content="${pageUrl}${site.socialImage.file}">`, `<meta property="og:image" content="${retiredHost}/glam-team-cleaners/${site.socialImage.file}">`), sitemap: seo.sitemap(), robots: seo.robots() }), /still name a retired host/],
     ],
   },

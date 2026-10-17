@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { ROBOTS_FILE, SITEMAP_FILE } from './seo.js';
 import { ICON_FILES } from './favicon.js';
+import { LINKS_FILE } from './links.js';
 
 /**
  * The files the site is served from — the single owner of that list.
@@ -22,7 +23,10 @@ export const ENTRY_FILES = ['index.html', SITEMAP_FILE, ROBOTS_FILE];
  */
 const NAMED_AT_ROOT = [ICON_FILES.ico, ICON_FILES.touch];
 
-const ROOT_FILES = [...ENTRY_FILES, 'styles.css', 'script.js', ...NAMED_AT_ROOT];
+// The link-in-bio page is not a root file — it is published as `links/index.html` so its address is
+// `/links/` — but it is published by convention like the entry files, and the footer points at it,
+// so the reference guard holds it to actually existing.
+const ROOT_FILES = [...ENTRY_FILES, 'styles.css', 'script.js', LINKS_FILE, ...NAMED_AT_ROOT];
 const ASSET_DIRECTORY = 'assets';
 
 /** Every file under a directory, as site-root-relative paths, so nested assets are covered. */

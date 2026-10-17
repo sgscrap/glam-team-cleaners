@@ -188,7 +188,9 @@ ${title(booking)}
 ${booking.points.map(point => `<li>${icon('check')}${esc(point)}</li>`).join('\n')}
 </ul>
 <div class="booking-contact">
+<p class="contact-person">${esc(site.contact.name)} <span>${esc(site.contact.role)}</span></p>
 <a href="${esc(site.phone.href)}">${icon('phone')}${esc(site.phone.label)}</a>
+<a href="${esc(site.email.href)}">${icon('mail')}${esc(site.email.label)}</a>
 </div>
 </div>
 <form class="booking-form" id="booking-form" data-endpoint="">
@@ -223,9 +225,12 @@ ${nav.map(item => `<a href="${esc(item.href)}">${esc(item.label)}</a>`).join('\n
 </nav>
 <div class="footer-col">
 <h2>${esc(footer.contactTitle)}</h2>
+<p class="footer-person">${esc(site.contact.name)}<br><span>${esc(site.contact.role)}</span></p>
 <a href="${esc(site.phone.href)}">${esc(site.phone.label)}</a>
+<a href="${esc(site.email.href)}">${esc(site.email.label)}</a>
 <a href="${esc(site.instagram)}" target="_blank" rel="noreferrer noopener">${esc(cta.instagram)}</a>
 <a href="#book">${esc(cta.requestQuote)}</a>
+<a href="links/">${esc(cta.links)}</a>
 </div>
 <div class="footer-col">
 <h2>${esc(footer.hoursTitle)}</h2>

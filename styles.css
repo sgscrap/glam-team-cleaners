@@ -373,6 +373,10 @@ h1 em, h2 em {
 .booking-points li { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .booking-points .icon { width: 16px; height: 16px; color: var(--rose-deep); }
 .booking-contact { display: flex; flex-direction: column; gap: 8px; font: 11px var(--mono); }
+/* Who picks up, above the two ways of reaching her: the card names a person, and an unnamed
+   number reads as a call centre. */
+.contact-person { margin-bottom: 2px; color: var(--ink); font: 600 13px var(--sans); letter-spacing: -0.01em; }
+.contact-person span { margin-left: 5px; color: var(--rose-deep); font-size: 12px; }
 .booking-contact a { display: inline-flex; align-items: center; gap: 8px; }
 .booking-contact a:hover { color: var(--rose-deep); }
 
@@ -432,6 +436,8 @@ h1 em, h2 em {
 .footer-col { display: flex; flex-direction: column; gap: 9px; }
 .footer-col h2 { margin-bottom: 8px; color: #9d8985; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
 .footer-col a, .footer-col p { color: #eee5de; font-size: 12px; }
+.footer-col .footer-person { color: #fff; font: 600 12.5px/1.5 var(--sans); }
+.footer-col .footer-person span { color: #a89a95; font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
 .footer-col p { color: #bcaeaa; line-height: 1.7; }
 .footer-col a:hover { color: var(--champagne); }
 .footer-bottom {

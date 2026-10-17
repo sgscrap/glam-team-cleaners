@@ -25,9 +25,15 @@ export const site = {
    * actually served from, so crawlers are never pointed at a domain that is not serving
    * the page.
    *
-   * The business's own domain, not the GitHub Pages address the site was built on: that
-   * gh.io URL now 301s here, so naming it would advertise a redirect instead of the site.
-   * `assertRetiredHostsAbsent` in checks.js fails the build if it comes back.
+   * The business's own domain, and the address every canonical names. The Pages default
+   * (`sgscrap.github.io/glam-team-cleaners/`) is where the repository publishes, not where the
+   * site belongs: naming it anywhere here would split the site across two addresses, one of
+   * which is a redirect to the other. `assertRetiredHostsAbsent` in checks.js fails the build
+   * if it comes back.
+   *
+   * `npm run domain` checks the other half of that promise — that this host actually answers
+   * with the bytes in this checkout — because nothing in a build can. The domain's DNS is not
+   * GitHub's; see that script's output for the records it expects.
    */
   url: 'https://glamcleaners.net',
   /**
@@ -57,12 +63,25 @@ export const site = {
     receivesText: false,
   },
   /**
-   * Deliberately absent: `email`. The business publishes no mailbox, and a request is answered by
-   * phone or not at all — so an address here would be a channel that does not exist. The booking
-   * form asks for no email either, and the structured data omits it, for the same reason.
+   * The mailbox printed on the business card, and the only one the page may publish. Footer,
+   * booking panel, structured data and the links page all read it from here, so an address that
+   * changes is changed once — the alternative is three addresses in two styles across the site,
+   * with nobody able to say which one a visitor's message actually reached.
    */
+  email: {
+    label: 'glamteamcleaners@gmail.com',
+    href: 'mailto:glamteamcleaners@gmail.com',
+  },
+  /**
+   * Who answers. The card names an estimator rather than a department, and a page that lists a
+   * number without saying whose it is makes the first call colder than the card does.
+   */
+  contact: {
+    name: 'Kelly Martínez',
+    role: 'Estimator',
+  },
   instagram: 'https://www.instagram.com/immaculatenesss/',
-  year: 2024,
+  year: 2026,
   city: 'your city',
 };
 
@@ -74,6 +93,10 @@ export const icons = {
   check: '<path d="M5 13l4 4L19 7"/>',
   heart: '<path d="M12 20s-7-4.4-7-9.4A4 4 0 0 1 12 7a4 4 0 0 1 7 3.6c0 5-7 9.4-7 9.4z"/>',
   phone: '<path d="M6 3h4l2 5-2.5 1.5a11 11 0 0 0 5 5L16 12l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 4 5a2 2 0 0 1 2-2z"/>',
+  mail: '<path d="M3 6h18v12H3z"/><path d="M3.5 6.8l8.5 5.7 8.5-5.7"/>',
+  calendar: '<rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M8 3v5M16 3v5M3.5 10.5h17"/>',
+  spark: '<path d="M12 3.5l1.9 5.6 5.6 1.9-5.6 1.9L12 18.5l-1.9-5.6L4.5 11l5.6-1.9z"/>',
+  instagram: '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.2 6.9h.01"/>',
 };
 
 /**
@@ -87,6 +110,12 @@ export const icons = {
 export const business = {
   type: 'LocalBusiness',
   catalogName: 'Cleaning services',
+  /**
+   * The registered name, as the card prints it. The page says "Glam Team Cleaners" because that
+   * is the brand, and the machine-readable record carries the full name beside it — a legal name
+   * is a fact about the business that a rich result can state without changing how it reads.
+   */
+  legalName: 'Glam Team Cleaners LLC',
 };
 
 export const nav = [
@@ -118,7 +147,9 @@ export const cta = {
   bookService: 'Book this clean',
   requestQuote: 'Request a quote',
   call: 'Call',
+  email: 'Email',
   instagram: 'Instagram ↗',
+  links: 'All our links ↗',
 };
 
 export const hero = {
@@ -454,8 +485,9 @@ export const booking = {
     { row: [{ name: 'firstName', label: 'First name', required: true, autocomplete: 'given-name', placeholder: 'Jane' },
             { name: 'lastName', label: 'Last name', autocomplete: 'family-name', placeholder: 'Doe' }] },
     /**
-     * Phone only, and required: no mailbox is published, so this is the one channel a request can
-     * come back on. An email field here would be a field nothing could answer.
+     * Phone only, and required: the form hands its request over as a call, so the number is the
+     * one detail the business cannot do without when the visitor dials. The mailbox is published
+     * beside the form rather than as a field, for a visitor who would rather write than ring.
      */
     { row: [{ name: 'phone', label: 'Phone number', type: 'tel', required: true, autocomplete: 'tel', placeholder: '(555) 123-4567' }] },
   ],
@@ -468,9 +500,9 @@ export const booking = {
   submit: site.phone.receivesText ? 'Send my request' : 'Call to book',
   note: site.phone.receivesText
     ? 'No spam — we use your details only to arrange your clean.'
-    : 'Nothing is sent from this page — call and we’ll take these details down.',
+    : `Nothing is sent from this page — call ${site.phone.label} or email ${site.email.label}, and we’ll take these details down.`,
   success: 'Thank you — your request is in. We’ll reply within one business day.',
-  error: `We couldn’t send your request just now. Please call ${site.phone.label} and we’ll take it from there.`,
+  error: `We couldn’t send your request just now. Call ${site.phone.label} or email ${site.email.label} and we’ll take it from there.`,
   reset: 'Book another clean',
 };
 
@@ -514,6 +546,66 @@ export const footer = {
   backToTop: 'Back to top ↑',
 };
 
+/** The handle behind `site.instagram`, read out of the one URL rather than typed a second time. */
+const instagramHandle = site.instagram.replace(/\/+$/, '').split('/').pop();
+
+/**
+ * The link-in-bio page at /links/ — one short address that fits in an Instagram bio, and the
+ * card's details on a page a phone can read in a second.
+ *
+ * It exists because a bio holds one URL: without it, the business either spends that line on the
+ * homepage (where a visitor has to find the number) or on a third-party link service that owns
+ * the click, the branding and the analytics. Every entry here is a channel this business answers
+ * on, and the ones that carry a price or a number are derived from the same data the site is
+ * built from — a rate change moves the link's subtitle with it.
+ *
+ * The optional channel is decided the same way the booking form's is: `site.phone.receivesText`.
+ * A "Text us" button on a line nobody has confirmed takes messages is the worst button on a page
+ * like this, because the visitor's message goes nowhere and nothing says so.
+ */
+export const links = {
+  /** Under the 60-character search limit, like every title on the site. */
+  title: 'Glam Team Cleaners | Call, email or book a clean',
+  description: 'Every way to reach Glam Team Cleaners in one place: call, email, book a clean online, and check current rates.',
+  eyebrow: site.est,
+  heading: { lead: site.brand.lead, accent: site.brand.tail },
+  lede: site.tagline,
+  /**
+   * "Kelly" rather than the business name a second time: the card is hers, and the person a
+   * visitor is about to call is the most useful thing on a page with six links.
+   */
+  person: site.contact,
+  personNote: 'Quotes, scheduling and questions',
+  items: [
+    { id: 'call', icon: 'phone', label: 'Call', detail: site.phone.label, href: site.phone.href, primary: true },
+    ...(site.phone.receivesText
+      ? [{ id: 'text', icon: 'mail', label: 'Text', detail: site.phone.label, href: `sms:${site.phone.href.replace(/^tel:/, '')}` }]
+      : []),
+    { id: 'email', icon: 'mail', label: 'Email', detail: site.email.label, href: site.email.href },
+    {
+      id: 'book',
+      icon: 'calendar',
+      label: 'Book a clean',
+      detail: 'Services, dates and times',
+      href: `${site.url}/#book`,
+    },
+    {
+      id: 'rates',
+      icon: 'spark',
+      label: 'Rates',
+      detail: `${pricing.rate.amount} ${pricing.rate.unit} · ${pricing.rate.floor.amount} minimum`,
+      href: `${site.url}/#pricing`,
+    },
+    { id: 'instagram', icon: 'instagram', label: 'Instagram', detail: `@${instagramHandle}`, href: site.instagram },
+  ],
+  navLabel: 'Ways to reach us',
+  hoursTitle: 'We answer',
+  hours: hoursText,
+  siteLink: { label: 'The full site ↗', href: `${site.url}/` },
+  /** The legal name rather than the brand: a copyright line is one of the few places it belongs. */
+  credit: `© ${site.year} ${business.legalName}`,
+};
+
 /**
  * Strings the browser needs at runtime: menu labels, the confirmation shown when a request is
  * handed to the visitor's own messaging app, and the labels used to compose that message.
@@ -535,11 +627,13 @@ export const runtime = {
      * details the visitor filled in on screen to read out — which is why the form is not reset
      * on this channel.
      */
-    call: `Our number is opening in your phone app — call ${site.phone.label} and we’ll take these details down.`,
+    call: `Our number is opening in your phone app — call ${site.phone.label} and we’ll take these details down. Prefer to write? ${site.email.label}.`,
   },
   /**
-   * The phone channel. No mailbox is published and no form endpoint is configured, so the phone
-   * is the only way a request leaves this page — as a call unless the line takes texts.
+   * The handoff channel. No form endpoint is configured, so the request leaves through the
+   * visitor's own phone — as a call unless the line takes texts. The mailbox is published beside
+   * the form, but it is not a handoff: a `mailto:` would carry the fields into a draft the visitor
+   * still has to send, which is a second send button dressed as the first.
    */
   handoff: {
     /** Whether the number takes a message; see `site.phone.receivesText`. */

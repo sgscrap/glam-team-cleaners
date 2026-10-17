@@ -9,6 +9,8 @@
 .footer-col { display: flex; flex-direction: column; gap: 9px; }
 .footer-col h2 { margin-bottom: 8px; color: #9d8985; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
 .footer-col a, .footer-col p { color: #eee5de; font-size: 12px; }
+.footer-col .footer-person { color: #fff; font: 600 12.5px/1.5 var(--sans); }
+.footer-col .footer-person span { color: #a89a95; font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
 .footer-col p { color: #bcaeaa; line-height: 1.7; }
 .footer-col a:hover { color: var(--champagne); }
 .footer-bottom {

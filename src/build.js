@@ -1,19 +1,25 @@
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { site, icons, runtime, ui, business } from './data.js';
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { site, icons, runtime, ui, business, links } from './data.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from './social-card.js';
 import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
+import { LINKS_FILE, LINKS_ICON_LINKS, linksHtml } from './links.js';
 import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_FILES, ICON_LINKS, iconFiles } from './favicon.js';
 import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
   RUNTIME_KEYS,
+  between,
   assertBookingOptionsMatch,
   assertBusinessFields,
   assertE164Phone,
   assertEmbeddedJsonParses,
+  assertEmail,
   assertFaqMatchesPage,
+  assertLinksPageHasEveryChannel,
+  assertSitemapListsEveryPage,
   assertHtmlIsWellFormed,
   assertFaviconAdaptsToDarkScheme,
   assertIconsDeclared,
@@ -51,6 +57,7 @@ const shipped = new Set(shippedFiles());
 function buildPage() {
   assertSiteUrl(site);
   assertE164Phone(site);
+  assertEmail(site);
   assertSearchCopyFits(site);
 
   const main = sections.mainSections.map(render => render()).join('\n');
@@ -121,6 +128,22 @@ ${jsonBlock('application/json', runtime, ' id="runtime-config"')}
   return html;
 }
 
+/* --- links/index.html --------------------------------------------------- */
+
+/**
+ * The link-in-bio page. Built here like every other artifact so `npm run check` holds it to src/
+ * as well: it is the page a stranger reaches first, from a bio, on a phone, and the one page here
+ * that nothing else on the site would notice going stale.
+ */
+function buildLinksPage(linked) {
+  const html = linksHtml();
+  assertHtmlIsWellFormed(html);
+  assertIconsDeclared(html, LINKS_ICON_LINKS);
+  assertLinksPageHasEveryChannel(html, site);
+  log(`links  ${LINKS_FILE}  ${html.length} bytes  ${linked} channels, icons declared`);
+  return html;
+}
+
 /* --- styles.css --------------------------------------------------------- */
 
 function buildStyles() {
@@ -139,8 +162,11 @@ function buildStyles() {
 
 /* --- write, or verify that the committed artifacts are current ----------- */
 
+const builtPage = buildPage();
+
 const artifacts = {
-  'index.html': buildPage(),
+  'index.html': builtPage,
+  [LINKS_FILE]: buildLinksPage(links.items.length),
   'styles.css': buildStyles(),
   [seo.SITEMAP_FILE]: seo.sitemap(),
   [seo.ROBOTS_FILE]: seo.robots(),
@@ -150,11 +176,17 @@ const artifacts = {
   ...iconFiles(),
 };
 
+// The canonicals read back out of the pages that were just built, rather than the list of pages
+// somebody meant to build: that is what makes the sitemap check two-sided.
+const canonicals = ['index.html', LINKS_FILE].map(file => between(artifacts[file], '<link rel="canonical" href="', '"')[0]);
+
 assertPublishedUrlsAgree({
   html: artifacts['index.html'],
   sitemap: artifacts[seo.SITEMAP_FILE],
   robots: artifacts[seo.ROBOTS_FILE],
 }, site);
+const listedPages = assertSitemapListsEveryPage({ sitemap: artifacts[seo.SITEMAP_FILE], pages: canonicals });
+console.log(`sitemap  ${listedPages} pages listed, each one a canonical this build emitted`);
 
 // Only now that every file a crawler reads exists: the guard reads all of each one, not just the
 // canonical line, so a retired host in the share card's absolute URL is caught here too.
@@ -162,6 +194,7 @@ assertRetiredHostsAbsent({
   html: artifacts['index.html'],
   sitemap: artifacts[seo.SITEMAP_FILE],
   robots: artifacts[seo.ROBOTS_FILE],
+  pages: { [LINKS_FILE]: artifacts[LINKS_FILE] },
 });
 
 /**
@@ -169,10 +202,12 @@ assertRetiredHostsAbsent({
  * only now do all the artifacts exist: the stylesheet is built after the page, and a
  * reference it contains has to count exactly as much as one in the markup.
  */
-const referenced = referencedFiles(
-  { html: artifacts['index.html'], css: artifacts['styles.css'] },
-  site,
-);
+const referenced = new Set([
+  ...referencedFiles({ html: artifacts['index.html'], css: artifacts['styles.css'] }, site),
+  // The links page is a directory deep, so its own references (`../favicon.ico`) are resolved from
+  // `links/` — otherwise the icons it declares would be read as files the site does not publish.
+  ...referencedFiles({ html: artifacts[LINKS_FILE], base: 'links/' }, site),
+]);
 const referenceCount = assertReferencesShip(referenced, shipped);
 const unreferenced = unreferencedFiles(referenced, shipped);
 const unreferencedBytes = unreferenced.reduce((total, file) => total + statSync(file).size, 0);
@@ -259,5 +294,10 @@ if (checkOnly) {
   }
   console.log(`\n✓ ${Object.keys(artifacts).join(', ')} match src/`);
 } else {
-  for (const [name, content] of Object.entries(artifacts)) writeFileSync(name, content);
+  // The links page is published from a directory of its own, so an artifact's path is not
+  // necessarily at the root of the repository.
+  for (const [name, content] of Object.entries(artifacts)) {
+    mkdirSync(dirname(name), { recursive: true });
+    writeFileSync(name, content);
+  }
 }

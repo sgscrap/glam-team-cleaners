@@ -27,12 +27,13 @@ export const RUNTIME_KEYS = ['menu', 'success', 'handoff'];
 /**
  * What a LocalBusiness rich result needs; whatever is absent is named in the failure.
  *
- * `email` is deliberately not among them. The business publishes no mailbox, so requiring one
- * would leave the choice between a fabricated address and a build that never passes — and a
- * rich result advertising a dead address is worse than one without it.
+ * `email` is among them because the business publishes a mailbox on its own card. It was
+ * deliberately absent while no address existed — the choice then was between a fabricated one and
+ * a build that never passes — and it is required now for the opposite reason: an address the
+ * business does answer is the cheapest channel to leave out of a search result.
  */
 export const REQUIRED_BUSINESS_FIELDS = [
-  '@context', '@type', 'name', 'url', 'telephone', 'image', 'openingHours', 'hasOfferCatalog',
+  '@context', '@type', 'name', 'url', 'telephone', 'email', 'image', 'openingHours', 'hasOfferCatalog',
 ];
 
 /** Elements that never take a closing tag, so no `</x>` is expected for them. */
@@ -60,6 +61,23 @@ export function assertSiteUrl({ url }) {
 export function assertE164Phone({ phone }) {
   if (phone.href.startsWith('tel:+')) return;
   throw new Error(`site.phone.href must be E.164 for structured data (tel:+...), got: ${phone.href}`);
+}
+
+/**
+ * The mailbox is published in a link, in the structured data and on the links page, and all three
+ * come from one object — so what has to be guarded is not that they agree but that the object is
+ * coherent: a link that opens a draft to a different address than the one printed beside it sends
+ * a customer's message somewhere nobody chose, and a label that is not an address at all fails the
+ * same silent way, in a `mailto:` a mail client refuses to open.
+ */
+export function assertEmail({ email }) {
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.label)) {
+    throw new Error(`site.email.label is not an address (${email.label}): it is printed on the page and written into the structured data, so a typo here is a mailbox that receives nothing`);
+  }
+  const expected = `mailto:${email.label}`;
+  if (email.href !== expected) {
+    throw new Error(`site.email.href must be mailto:<the address printed on the page> (${expected}), got: ${email.href}`);
+  }
 }
 
 /** A title or description past the limit loses its tail in search results. */
@@ -159,7 +177,7 @@ export function assertHtmlIsWellFormed(html) {
  * request at all, so a scan that read only `src`/`href` would report the site's own social
  * preview as a file nothing uses.
  */
-export function referencedFiles({ html, css = '' }, site) {
+export function referencedFiles({ html, css = '', base = '' }, site) {
   const underSite = `${site.url}/`;
   const asPath = value => (value.startsWith(underSite) ? value.slice(underSite.length) : value);
   const values = [
@@ -172,10 +190,27 @@ export function referencedFiles({ html, css = '' }, site) {
       .filter(value => value.startsWith(underSite)),
     ...[...css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)].map(([, value]) => value),
   ];
-  return new Set(values
-    .map(asPath)
-    .map(path => path.split(/[?#]/)[0])
-    .filter(path => path && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(path)));
+  /**
+   * A page published from a subdirectory — /links/ — names its icons as `../favicon.ico`, which is
+   * a reference to a published file and has to count as one. So relative paths are resolved
+   * against the page's own directory, and a trailing slash means the directory's index.html, which
+   * is how `/links/` and `links/index.html` are the same file rather than two. An absolute path is
+   * taken from the site root, and a foreign URL is not a reference to anything here at all.
+   */
+  const resolve = value => {
+    // A URL under the site's own host is already site-root relative; a bare path is relative to
+    // the page that wrote it. Rebasing an absolute URL onto `base` turns `…/assets/card.png`
+    // written by the links page into `links/assets/card.png`, which is a different file.
+    const absolute = value.startsWith(underSite);
+    const clean = (absolute ? value.slice(underSite.length) : value).split(/[?#]/)[0];
+    if (!clean || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(clean)) return null;
+    const file = absolute || clean.startsWith('/')
+      ? clean.replace(/^\//, '')
+      : new URL(clean, `https://page.test/${base}`).pathname.slice(1);
+    return file.endsWith('/') ? `${file}index.html` : file;
+  };
+
+  return new Set(values.map(resolve).filter(Boolean));
 }
 
 /**
@@ -748,11 +783,15 @@ export const RETIRED_HOSTS = ['sgscrap.github.io'];
  * a stale host in the share card's absolute URL, or anywhere else the page names itself, is
  * caught too rather than only the three places that are already compared to `site.url`.
  */
-export function assertRetiredHostsAbsent({ html, sitemap, robots }) {
+export function assertRetiredHostsAbsent({ html, sitemap, robots, pages = {} }) {
   const stale = [
     ['index.html', html],
     [SITEMAP_FILE, sitemap],
     [ROBOTS_FILE, robots],
+    // Every other page the site publishes, by its own file name. The links page was added after
+    // the move to the custom domain, which is exactly when a page is most likely to be written
+    // with the old address in its canonical — copied from a template or from a browser's URL bar.
+    ...Object.entries(pages),
   ]
     .filter(([, text]) => RETIRED_HOSTS.some(host => text.includes(host)))
     .map(([file]) => file);
@@ -790,15 +829,63 @@ export function assertPublishedUrlsAgree({ html, sitemap, robots }, site) {
     throw new Error(`Published URLs disagree with site.url (${site.url}): ${wrong.join('; ')}`);
   }
 
-  /** A second <loc> or Sitemap line means a URL nobody reviewed is being advertised. */
+  /**
+   * Anything advertised outside this site, or a second Sitemap line. Since the site publishes two
+   * pages, a <loc> no longer has to be the homepage — but it does still have to be this site, and
+   * `assertSitemapListsEveryPage` is what says which pages those are.
+   */
   const extra = [
-    [SITEMAP_FILE, locations.filter(url => url !== pageUrl)],
+    [SITEMAP_FILE, locations.filter(url => !url.startsWith(`${site.url}/`))],
     [ROBOTS_FILE, declared.filter(url => url !== sitemapUrl)],
   ].filter(([, urls]) => urls.length);
   if (extra.length) {
     throw new Error(`Unexpected URLs published to crawlers: ${extra
       .map(([file, urls]) => `${file} (${urls.join(', ')})`).join('; ')}`);
   }
+}
+
+/**
+ * The sitemap lists every page that was built, and nothing else.
+ *
+ * Both directions matter, and neither is visible in the file itself: a page missing from the
+ * sitemap is one a crawler has to find by luck, and a <loc> for a page whose build was renamed is
+ * a 404 published in the one file search engines trust. `pages` is the canonicals the build just
+ * emitted, so this compares the sitemap with what exists rather than with a list that describes
+ * what somebody meant to build.
+ */
+export function assertSitemapListsEveryPage({ sitemap, pages }) {
+  const listed = between(sitemap, '<loc>', '</loc>');
+  const missing = pages.filter(url => !listed.includes(url));
+  const unknown = listed.filter(url => !pages.includes(url));
+  if (missing.length) {
+    throw new Error(`The sitemap omits published pages, so a crawler has to find them by luck: ${missing.join(', ')}`);
+  }
+  if (unknown.length) {
+    throw new Error(`The sitemap advertises pages this build did not emit: ${unknown.join(', ')}`);
+  }
+  return listed.length;
+}
+
+/**
+ * The link-in-bio page exists to carry channels, so the guard is about the channels being on it.
+ *
+ * A link page goes stale in a way no build notices: the number changes in `data.js`, the big
+ * marketing page is rebuilt and checked, and the page the bio points at keeps offering the old one
+ * — which for this page is not a stale footnote, it is the whole content. Read off the finished
+ * markup, with the addresses taken from `site` rather than retyped here.
+ */
+export function assertLinksPageHasEveryChannel(page, { phone, email, url }) {
+  const required = [
+    ['the phone number', phone.href],
+    ['the mailbox', email.href],
+    ['the booking anchor on the site', `${url}/#book`],
+    ['the site itself', `${url}/`],
+  ];
+  const missing = required.filter(([, href]) => !page.includes(href)).map(([what]) => what);
+  if (missing.length) {
+    throw new Error(`The links page does not carry ${missing.join(', ')}: it is the one address a bio holds, so a channel missing here is a click that cannot happen`);
+  }
+  return required.length;
 }
 
 /* --- what the page costs to load ---------------------------------------- */

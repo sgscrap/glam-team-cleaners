@@ -27,14 +27,21 @@ const STYLESHEET = 'src/links.css';
 
 /**
  * The icons this page declares. Spelled here rather than reusing ICON_LINKS because the paths are
- * relative to `/links/` instead of the site root — and the build asserts the page declares exactly
+ * relative to the page instead of the site root — and the build asserts the page declares exactly
  * these, so a path that only works from one directory cannot slip through.
+ *
+ * The prefix is a parameter because this page is published twice: at `/links/`, one directory below
+ * the site root, and at the root of its own subdomain. Both addresses must name files that really
+ * sit beside them, and neither may borrow the other's paths.
  */
-export const LINKS_ICON_LINKS = [
-  { rel: 'icon', href: '../favicon.ico', sizes: '16x16 32x32 48x48' },
-  { rel: 'icon', href: '../assets/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
-  { rel: 'apple-touch-icon', href: '../apple-touch-icon.png', sizes: '180x180' },
+export const linksIconLinks = prefix => [
+  { rel: 'icon', href: `${prefix}favicon.ico`, sizes: '16x16 32x32 48x48' },
+  { rel: 'icon', href: `${prefix}assets/favicon.svg`, type: 'image/svg+xml', sizes: 'any' },
+  { rel: 'apple-touch-icon', href: `${prefix}apple-touch-icon.png`, sizes: '180x180' },
 ];
+
+/** The declarations the `/links/` copy carries — the default, and the one the build asserts. */
+export const LINKS_ICON_LINKS = linksIconLinks('../');
 
 /** The same families the site uses, so a click from the page lands on a page that matches it. */
 const FONTS = 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap';
@@ -62,8 +69,13 @@ ${icon(name)}
  * The page. No JSON-LD and no runtime script: everything on it is a link, and the one thing that
  * could be wrong — an address that does not match the card — is checked at build time instead of
  * repaired in the browser.
+ *
+ * `canonical` and `prefix` are what the second publication of this page changes: the subdomain's
+ * copy is its own root, so its files sit beside it rather than one directory up, and its address is
+ * the bare host. Everything below that — the copy, the numbers, the channels — is one source, so
+ * the two addresses cannot drift apart.
  */
-export const linksHtml = () => `<!doctype html>
+export const linksHtml = ({ canonical = LINKS_URL, prefix = '../' } = {}) => `<!doctype html>
 <!-- ${GENERATED_NOTE} Built from src/data.js and src/links.css. -->
 <html lang="en">
 <head>
@@ -71,14 +83,14 @@ export const linksHtml = () => `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${esc(links.title)}</title>
 <meta name="description" content="${esc(links.description)}">
-<link rel="canonical" href="${esc(LINKS_URL)}">
-${LINKS_ICON_LINKS.map(({ rel, href, ...attributes }) => `<link rel="${rel}" href="${esc(href)}"${
+<link rel="canonical" href="${esc(canonical)}">
+${linksIconLinks(prefix).map(({ rel, href, ...attributes }) => `<link rel="${rel}" href="${esc(href)}"${
   Object.entries(attributes).map(([name, value]) => ` ${name}="${value}"`).join('')}>`).join('\n')}
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${esc(site.name)}">
 <meta property="og:title" content="${esc(links.title)}">
 <meta property="og:description" content="${esc(links.description)}">
-<meta property="og:url" content="${esc(LINKS_URL)}">
+<meta property="og:url" content="${esc(canonical)}">
 <meta property="og:image" content="${esc(`${site.url}/${site.socialImage.file}`)}">
 <meta property="og:image:alt" content="${esc(site.socialImage.alt)}">
 <meta property="og:locale" content="en_US">
@@ -95,7 +107,7 @@ ${readCss(TOKENS)}${readCss(STYLESHEET)}</style>
 <body>
 <main class="card">
 <header class="identity">
-<img class="logo" src="../apple-touch-icon.png" alt="" width="60" height="60">
+<img class="logo" src="${prefix}apple-touch-icon.png" alt="" width="60" height="60">
 <p class="eyebrow"><i aria-hidden="true"></i> ${esc(links.eyebrow)}</p>
 <h1>${esc(links.heading.lead)}<br><em>${esc(links.heading.accent)}</em></h1>
 <p class="lede">${esc(links.lede)}</p>

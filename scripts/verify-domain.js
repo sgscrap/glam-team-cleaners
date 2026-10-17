@@ -13,6 +13,11 @@
  * pages this build emits, fetches them from the domain, and compares them byte for byte — which is
  * stronger than a 200, because a stale deployment or a parking page also answers 200.
  *
+ * It also names what the domain is doing instead, when it is doing something else. The response
+ * that has been answering this one is not even valid HTTP/1.1 — its lines end in a bare newline —
+ * so the request is read off the socket rather than through a client that would refuse it, and a
+ * redirect is reported with its destination instead of being followed.
+ *
  * Run it by hand after touching DNS or Pages settings:
  *
  *     npm run domain
@@ -23,28 +28,25 @@
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { get } from 'node:https';
+import { connect } from 'node:tls';
 import { resolve4, resolve6, resolveCname } from 'node:dns/promises';
 import { site } from '../src/data.js';
+import { HOST, LINK_HOST, PAGES_A, PAGES_AAAA, PAGES_DOMAIN, ZONE_FILE } from '../src/dns.js';
+import { LINK_SITE_URL } from '../src/link-site.js';
 
 /**
- * GitHub Pages' own addresses for a custom apex domain, spelled out rather than discovered: they
- * are what the DNS records have to contain, so a check that read them from the place it is
- * checking would agree with any mistake. From GitHub's "Managing a custom domain" documentation.
+ * The pages this build emits, as the address each must answer on and the file holding it. Two
+ * hosts, because the link page is served twice: at `/links/` on the site, and at the root of its
+ * own Pages site. Both are compared byte for byte — a subdomain that shows an older copy of the
+ * page is the failure this list exists to make visible.
  */
-const PAGES_A = ['185.199.108.153', '185.199.109.153', '185.199.110.153', '185.199.111.153'];
-const PAGES_AAAA = ['2606:50c0:8000::153', '2606:50c0:8001::153', '2606:50c0:8002::153', '2606:50c0:8003::153'];
-
-/** The default Pages address this repository is published at, which a custom domain replaces. */
-const DEFAULT_DOMAIN = 'sgscrap.github.io';
-
-/** The pages this build emits, as the URL path each is published at and the file holding it. */
 const PAGES = [
-  { path: '', file: 'index.html' },
-  { path: 'links/', file: 'links/index.html' },
+  { url: `${site.url}/`, file: 'index.html' },
+  { url: `${site.url}/links/`, file: 'links/index.html' },
+  { url: LINK_SITE_URL, file: 'links-site/index.html' },
 ];
 
-const host = new URL(site.url).hostname;
+const host = HOST;
 const failures = [];
 const notes = [];
 
@@ -54,6 +56,9 @@ const fail = (text, why) => {
   failures.push(text);
   say('✗', why ? `${text} — ${why}` : text);
 };
+
+/** A decision about every other name on the domain, not something the canonicals depend on. */
+const warn = text => say('!', text);
 
 /** Every address the name answers with, sorted, so two lists compare as sets and not as orders. */
 const addresses = async (name, type) => {
@@ -100,13 +105,52 @@ try {
   // A CNAME is not the only way to point a subdomain at Pages — several providers flatten it.
 }
 const wwwA = await addresses(www, 'A');
-if (wwwCname.some(name => name.toLowerCase() === `${DEFAULT_DOMAIN}.`) || sameSet(wwwA, PAGES_A)) {
+if (wwwCname.some(name => name.toLowerCase() === `${PAGES_DOMAIN}.`) || sameSet(wwwA, PAGES_A)) {
   pass(`DNS  ${www} → ${wwwCname.length ? wwwCname.join(', ') : 'the GitHub Pages addresses'}`);
 } else {
   fail(
     `DNS  ${www} → ${wwwCname.length ? wwwCname.join(', ') : wwwA.join(', ') || 'nothing'}`,
-    `it should be a CNAME to ${DEFAULT_DOMAIN}`,
+    `it should be a CNAME to ${PAGES_DOMAIN}`,
   );
+}
+
+/**
+ * The subdomain. It is a second Pages site rather than a path, so its record is a CNAME of its
+ * own — and until that record exists, the wildcard is what answers for it, with the forwarder.
+ */
+let linksCname = [];
+try {
+  linksCname = await resolveCname(LINK_HOST);
+} catch {
+  // A flattened CNAME answers in A records instead; GitHub accepts either.
+}
+const linksA = await addresses(LINK_HOST, 'A');
+if (linksCname.some(name => name.toLowerCase() === `${PAGES_DOMAIN}.`)) {
+  pass(`DNS  ${LINK_HOST} → ${linksCname.join(', ')}`);
+} else if (sameSet(linksA, PAGES_A)) {
+  pass(`DNS  ${LINK_HOST} → the GitHub Pages addresses`);
+} else if (linksA.length) {
+  fail(
+    `DNS  ${LINK_HOST} → ${linksA.join(', ')}`,
+    `it should be a CNAME to ${PAGES_DOMAIN}; today the wildcard is answering`,
+  );
+} else {
+  fail(`DNS  ${LINK_HOST} has no record`, `add a CNAME for links pointing at ${PAGES_DOMAIN}`);
+}
+
+/**
+ * A wildcard is why every name under the domain "works", including the ones nobody configured —
+ * `links.` included, which answers with the forwarder rather than with the site. GitHub's own
+ * guidance is not to use one, since it hands any unclaimed subdomain to whoever asks; reported
+ * rather than failed, because the apex is what the canonicals depend on.
+ */
+
+const probeName = `wildcard-${Math.random().toString(36).slice(2, 8)}.${host}`;
+const wildcard = await addresses(probeName, 'A');
+if (wildcard.length) {
+  warn(`DNS  *.${host} resolves (${probeName} → ${wildcard.join(', ')}) — a wildcard answers for every subdomain, and today it answers with the forwarder`);
+} else {
+  pass(`DNS  no wildcard under ${host}: an unconfigured subdomain does not resolve`);
 }
 
 /* --- HTTP ---------------------------------------------------------------- */
@@ -116,47 +160,82 @@ if (wwwCname.some(name => name.toLowerCase() === `${DEFAULT_DOMAIN}.`) || sameSe
  * forwarding somewhere else (so a redirect is read, never followed), and that what it serves is
  * the build in this checkout rather than an older one.
  *
- * A raw `https.get` rather than `fetch`, because a redirect has to stay a value this script can
- * report rather than something invisible, and because the response that has been answering the
- * domain is not valid HTTP/1.1 at all — its lines end in a bare newline, which curl tolerates and
- * every Node client refuses. That is worth naming when it happens instead of surfacing as a bare
- * "fetch failed".
+ * The request is written by hand and the answer parsed leniently, for one reason: the provider
+ * currently answering this domain ends its header lines with a bare newline, which `fetch` and
+ * `https.get` both refuse to parse. Refusing to read it would leave the check saying "the request
+ * failed" about a server that answered perfectly clearly — with a 301 to the Pages address.
  */
 const digest = buffer => createHash('sha256').update(buffer).digest('hex').slice(0, 12);
 
+/** De-frame a chunked body: GitHub sends one, and the comparison is on bytes, not on framing. */
+const dechunk = buffer => {
+  const parts = [];
+  let at = 0;
+  while (at < buffer.length) {
+    const end = buffer.indexOf('\r\n', at);
+    if (end === -1) break;
+    const size = Number.parseInt(buffer.subarray(at, end).toString('latin1'), 16);
+    if (!Number.isFinite(size) || size <= 0) break;
+    parts.push(buffer.subarray(end + 2, end + 2 + size));
+    at = end + 2 + size + 2;
+  }
+  return Buffer.concat(parts);
+};
+
 const probe = url => new Promise((resolve, reject) => {
-  const request = get(url, { headers: { 'user-agent': 'glam-team-cleaners domain check' } }, response => {
-    const chunks = [];
-    response.on('data', chunk => chunks.push(chunk));
-    response.on('end', () => resolve({
-      status: response.statusCode,
-      location: response.headers.location,
-      body: Buffer.concat(chunks),
-    }));
-    response.on('error', reject);
+  const { hostname, pathname, search } = new URL(url);
+  const socket = connect({ host: hostname, servername: hostname, port: 443 }, () => {
+    socket.write(`GET ${pathname}${search} HTTP/1.1\r\n`
+      + `Host: ${hostname}\r\n`
+      + 'User-Agent: glam-team-cleaners domain check\r\n'
+      + 'Accept: */*\r\n'
+      + 'Connection: close\r\n\r\n');
   });
-  request.setTimeout(20000, () => request.destroy(new Error('no answer within 20s')));
-  request.on('error', reject);
+  const chunks = [];
+  socket.on('data', chunk => chunks.push(chunk));
+  socket.on('end', () => {
+    const raw = Buffer.concat(chunks);
+    // Headers end at the first blank line, in whichever line-ending convention the server used.
+    const crlf = raw.indexOf('\r\n\r\n');
+    const lf = raw.indexOf('\n\n');
+    const boundary = crlf !== -1 ? crlf + 4 : lf !== -1 ? lf + 2 : raw.length;
+    const lines = raw.subarray(0, boundary).toString('latin1').split(/\r?\n/);
+    const header = name => lines
+      .map(line => new RegExp(`^${name}:\\s*(.+)$`, 'i').exec(line.trim())?.[1]?.trim())
+      .find(Boolean);
+    resolve({
+      status: Number(/^HTTP\/\d(?:\.\d)? (\d{3})/.exec(lines[0]?.trim() ?? '')?.[1]),
+      location: header('location'),
+      chunked: /chunked/i.test(header('transfer-encoding') ?? ''),
+      body: raw.subarray(boundary),
+    });
+  });
+  socket.on('error', reject);
+  socket.setTimeout(20000, () => socket.destroy(new Error('no answer within 20s')));
 });
 
-for (const { path, file } of PAGES) {
-  const url = `${site.url}/${path}`;
+for (const { url, file } of PAGES) {
   const local = readFileSync(file);
   let response;
   try {
     response = await probe(url);
   } catch (error) {
-    // A parse error is not a network hiccup: the host answered, in something that is not HTTP.
-    const malformed = /HPE_|protocol|Expected CR/i.test(`${error.code ?? ''} ${error.message}`);
-    fail(`HTTP ${url}`, malformed
-      ? `the host answers with a response that is not valid HTTP/1.1 (${error.message}), so it is not serving this site`
-      : `the request failed: ${error.message}`);
+    fail(`HTTP ${url}`, `the request failed: ${error.message}`);
+    continue;
+  }
+
+  if (!Number.isFinite(response.status)) {
+    fail(`HTTP ${url}`, 'the host answered with bytes that are not an HTTP response at all');
     continue;
   }
 
   if (response.status >= 300 && response.status < 400) {
-    fail(`HTTP ${url} → ${response.status} ${response.location ?? ''}`.trim(),
-      'the address must serve the page, not forward it: every canonical names this URL');
+    fail(
+      `HTTP ${url} → ${response.status} ${response.location ?? ''}`.trim(),
+      response.location?.includes(PAGES_DOMAIN)
+        ? `it is a domain forward to the Pages address, so every path on the domain lands on one page`
+        : 'the address must serve the page, not forward it: every canonical names this URL',
+    );
     continue;
   }
   if (response.status !== 200) {
@@ -164,11 +243,12 @@ for (const { path, file } of PAGES) {
     continue;
   }
 
-  if (response.body.equals(local)) {
-    pass(`HTTP ${url} serves ${file} byte for byte (${digest(response.body)})`);
+  const served = response.chunked ? dechunk(response.body) : response.body;
+  if (served.equals(local)) {
+    pass(`HTTP ${url} serves ${file} byte for byte (${digest(served)})`);
   } else {
     fail(
-      `HTTP ${url} serves something else (${response.body.length} bytes, ${digest(response.body)}, where ${file} is ${local.length}, ${digest(local)})`,
+      `HTTP ${url} serves something else (${served.length} bytes, ${digest(served)}, where ${file} is ${local.length}, ${digest(local)})`,
       'what is live is not this checkout, so a canonical or a contact detail could be stale',
     );
   }
@@ -180,16 +260,24 @@ for (const note of notes) say('·', note);
 
 if (failures.length) {
   console.error(`\n✗ ${failures.length} thing(s) stand between ${host} and this site.\n`);
-  console.error('  The DNS records belong to the domain\'s provider — these are their values:');
-  console.error(`     A     @    ${PAGES_A.join(', ')}`);
-  console.error(`     AAAA  @    ${PAGES_AAAA.join(', ')}   (optional)`);
-  console.error(`     CNAME www  ${DEFAULT_DOMAIN}`);
-  console.error('  Remove any forward or redirect set on the domain: a forward rewrites every path');
-  console.error('  to one URL, which is why /links/ currently lands on the homepage.');
-  console.error('\n  Then attach the domain to the repository once, and GitHub issues its certificate:');
+  console.error(`  One action fixes them: replace what is at the DNS panel with ${ZONE_FILE},`);
+  console.error('  and delete the forward and any wildcard record. The same records, inline:');
+  console.error('');
+  console.error(`     A      @     ${PAGES_A.join(', ')}`);
+  console.error(`     AAAA   @     ${PAGES_AAAA.join(', ')}            (optional)`);
+  console.error(`     CNAME  www   ${PAGES_DOMAIN}`);
+  console.error(`     CNAME  links ${PAGES_DOMAIN}`);
+  console.error('');
+  console.error('  The forward is the part that rewrites every path, which is why /links/ lands on');
+  console.error('  the homepage instead of the page a bio would point at. The links CNAME is the');
+  console.error('  second Pages site: without it the wildcard keeps answering and the subdomain');
+  console.error('  shows the homepage.');
+  console.error('');
+  console.error('  Once DNS answers, attaching the domain is one call — GitHub then issues the');
+  console.error('  certificate, and the default Pages address starts redirecting here:');
   console.error(`     gh api -X PUT repos/sgscrap/glam-team-cleaners/pages -f cname=${host}`);
   console.error('');
   process.exit(1);
 }
 
-console.log(`\n✓ ${host} serves this build, both pages, and every published URL names it.`);
+console.log(`\n✓ ${host} serves this build, every published URL names it, and ${LINK_HOST} serves the link page at its root.`);

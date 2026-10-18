@@ -124,13 +124,21 @@ not installed or the record is still DNS-only — re-run step 2.
   after step 4:
 
 ```sh
+# 1. attach the domain — this starts a DNS check, and a certificate request once it passes
 gh api -X PUT repos/sgscrap/glam-team-cleaners/pages -f cname=glamcleaners.net
+
+# 2. enforce HTTPS — only after the certificate exists (Settings → Pages shows a check mark)
 gh api -X PUT repos/sgscrap/glam-team-cleaners/pages -f https_enforced=true
 ```
 
 Attaching the custom domain makes the default Pages address (`sgscrap.github.io/glam-team-cleaners/`)
 redirect to it, which is why it waits until the domain actually answers. The first call starts
-certificate issuance; expect a few minutes to an hour.
+certificate issuance; expect a few minutes to an hour, and the check mark beside the domain in
+Settings → Pages is the confirmation. Do not set `https_enforced` before that check appears: the
+same setting is unavailable in the dashboard until GitHub has the certificate, and the API reports
+nothing useful if you ask early. The sequence is GitHub's own — DNS check, then certificate, then
+enforcement. (`gh api … /pages` does not return the certificate object, so `Settings → Pages` is the
+place to read its state.)
 
 ### 6. Afterwards
 

@@ -8,8 +8,8 @@
 
 * text=auto
 
-# `*.html` rather than `index.html`: the link page is generated at two paths, `/links/` and the
-# root of its own site, and both are compared byte for byte.
+# `*.html` rather than `index.html`: the link page is generated too, at `/links/`, and is
+# compared byte for byte like the homepage.
 *.html text eol=lf
 styles.css text eol=lf
 sitemap.xml text eol=lf
@@ -18,12 +18,23 @@ script.js text eol=lf
 src/** text eol=lf
 assets/favicon.svg text eol=lf
 
-# Generated text the drift check compares: the zone file and the second site's page.
-# Its PNG and ICO are binary and are deliberately not listed — a text rule would rewrite them.
+# Generated text the drift check compares: the zone file.
+# PNG and ICO are binary and are deliberately not listed — a text rule would rewrite them.
 dns/*.zone text eol=lf
-links-site/index.html text eol=lf
-links-site/CNAME text eol=lf
-links-site/assets/*.svg text eol=lf
+
+# The runbook's target-state block is generated into the document, so it is compared byte for
+# byte like the zone file is. Its prose is hand-written, and LF keeps the comparison honest on a
+# checkout that would otherwise convert it.
+DOMAIN.md text eol=lf
+
+# The accounts page is generated whole, from src/accounts.js, and compared byte for byte like
+# every other artifact: a checkout that turned its line endings into CRLF would fail the drift
+# check for a reason that has nothing to do with the change.
+ACCOUNTS.md text eol=lf
+
+# The registrar timeline is data, not an artifact, but its formatting is asserted byte for byte
+# the way the zone file's is: a checkout that converted it would fail a guard for no reason.
+registrar-history.json text eol=lf
 deploy/** text eol=lf
 scripts/** text eol=lf
 .githooks/** text eol=lf

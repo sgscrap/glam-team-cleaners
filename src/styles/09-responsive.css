@@ -55,9 +55,16 @@
 
   .trust-strip { padding-top: 40px; padding-bottom: 40px; }
 
-  .work-grid { grid-template-columns: 1fr; grid-auto-rows: 240px; }
-  .work-grid .work-large.has-photo { grid-row: span 1; }
-  .work-grid .no-photo figcaption strong { font-size: 22px; }
+  .work-photo-set { display: grid; grid-template-columns: 1fr; gap: 12px; aspect-ratio: auto; }
+  .work-photo-frame { flex: none; }
+  .work-photo-image { width: 100%; height: auto; }
+  .work-photo[data-count="1"] { display: block; }
+  .work-photo[data-count="1"] .work-photo-set { width: 100%; }
+  .work-grid { grid-template-columns: 1fr; }
+  .work-photo .work-caption { font-size: 22px; }
+  .work-caption { font-size: 18px; }
+  .compare-grip { width: 36px; height: 36px; margin: -18px 0 0 -18px; }
+  .compare-label { top: 12px; padding: 4px 8px; }
   .checklist { grid-template-columns: 1fr; gap: 20px; }
   .process-steps { grid-template-columns: 1fr; }
 

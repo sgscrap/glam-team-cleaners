@@ -19,21 +19,23 @@
 ; forwarder), which means every subdomain already "works" and none of them
 ; serves the site. GitHub's own guidance is not to use a wildcard at all.
 ;
-; The links record is a second Pages site, not a path on this one. A Pages site
-; holds one custom domain, so the bare subdomain is a second repository
-; publishing the same page at its root — and the wildcard is exactly what would
-; keep it showing the homepage instead.
+; The links record is not a second site. It is proxied so Cloudflare sees the
+; name at all, and the redirect rule answers every request for it with a 301 to
+; /links/ before the origin is reached; the wildcard is exactly what would keep
+; it answering with the forwarder's homepage instead.
 ;
 ; This file is the site's records only. The domain also carries email, and a
 ; provider that takes this file as the whole zone would stop it:
 ;
 ;   MX     10 mailserver.businessidentity.llc
 ;   TXT    "v=spf1 a mx include:spf.postal.businessidentity.llc ~all"
-;   TXT    _dmarc "v=DMARC1; p=quarantine; rua=mailto:bounce@dmarc.businessidentity.llc; fo=1"
+;   TXT    _dmarc "v=DMARC1; p=quarantine; rua=mailto:bounce@dmarc.businessidentity.llc; ruf=mailto:bounce@dmarc.businessidentity.llc; fo=1"
 ;
-;   ...and the DKIM records the current panel holds, which cannot be read from
-;   outside it. As observed 2026-10-17 — copy them from the panel, not
-;   from this comment.
+;   No DKIM key is published under this domain: 153 conventional selector
+;   names (<selector>._domainkey.glamcleaners.net) answered with no TXT, observed
+;   2026-10-17. Nothing to copy, and nothing that can verify a
+;   signature under this domain. If the panel names a selector, read it with
+;   npm run dkim -- --selector <name> — the move writes any key it finds.
 ;
 ; The whole sequence, in order, with the commands and the rollback: DOMAIN.md
 ; in the repository root.

@@ -3,22 +3,30 @@
  * Nothing here is markup — the renderers in sections.js turn it into HTML.
  *
  * Every photograph on this page is one the business owns. That is a rule, not a preference: a
- * rented stock interior under a heading like "Our work" claims a job nobody here did, and no
- * alt text can make that honest. Where a real photograph does not exist yet the slot holds copy
- * rather than borrowing one — see `gallery.items[].photo` — and the build refuses to emit a
- * page whose images load from anywhere but this site.
+ * rented stock interior under a heading like "The work we do" claims a job nobody here did, and
+ * no alt text can make that honest. Where a photograph of a job does not exist yet the slot holds
+ * an illustration of the work itself, labelled as one — see `gallery.items[].before` — and the
+ * build refuses to emit a page whose images load from anywhere but this site.
  */
 
 /** Founding year feeds the hero stamp and the structured-data foundingDate alike. */
 const founded = 2018;
 
+/**
+ * The one spelling of where the business works. The tagline, the footer, the hero line and the
+ * machine-readable `areaServed` all read it from here, so a service area that widens is widened
+ * once — a page that says "Baltimore" in the title and "the greater city" in the footer reads like
+ * a template nobody finished.
+ */
+const serviceArea = 'Baltimore and the surrounding areas';
+
 export const site = {
   name: 'Glam Team Cleaners',
   brand: { lead: 'Glam Team', tail: 'Cleaners' },
-  title: 'Glam Team Cleaners | Thoughtful cleaning, beautifully done.',
+  title: 'Glam Team Cleaners | Baltimore House & Office Cleaning',
   description:
-    'Glam Team Cleaners — thoughtful residential and commercial cleaning with a polished touch. Book your clean in minutes.',
-  tagline: 'Thoughtful cleaning with a polished touch. Residential and commercial, across the greater city.',
+    `Glam Team Cleaners — thoughtful residential and commercial cleaning across ${serviceArea}. Book your clean in minutes.`,
+  tagline: 'Thoughtful cleaning with a polished touch. Residential and commercial, across greater Baltimore.',
   /**
    * Absolute, no trailing slash — the base for the canonical link, the Open Graph URL,
    * the sitemap's <loc>, and the structured-data @id. This is the address the site is
@@ -82,7 +90,8 @@ export const site = {
   },
   instagram: 'https://www.instagram.com/immaculatenesss/',
   year: 2026,
-  city: 'your city',
+  city: 'Baltimore',
+  serviceArea,
 };
 
 /** Icon path data. Only referenced icons are emitted into the sprite. */
@@ -322,7 +331,7 @@ export const pricing = {
     unit: 'per hour',
     floor: { lead: 'and at least', amount: dollars(baseRate.minimum), tail: 'for the smallest job' },
   },
-  note: `Plans above show typical visits at the ${dollars(baseRate.perHour)} hourly rate. Nothing is booked for less than the ${dollars(baseRate.minimum)} minimum.`,
+  note: `Plans above show typical visits at the ${dollars(baseRate.perHour)} hourly rate. Nothing is booked for less than the ${dollars(baseRate.minimum)} minimum. Laundry, where there is a washer and dryer, and dishwashing can be added for an extra fee.`,
   tiers: priced([
     {
       id: 'refresh',
@@ -381,26 +390,154 @@ export const process = {
 };
 
 export const gallery = {
-  eyebrow: 'A few favorites',
-  lead: 'Our work,',
-  accent: 'in the wild.',
-  aside: 'Little moments of order, calm, and light — made for real life.',
+  eyebrow: 'Before & after',
+  lead: 'The work we do,',
+  accent: 'room by room.',
+  aside: 'Our own photographs, and the standard we work to.',
   /**
-   * A portfolio entry is a photograph of a job this business did, or nothing at all.
+   * The words the comparison draws, the two words that say what kind of entry this is, and the line
+   * under the section.
    *
-   * `photo` is the slot, taking the same shape as every other photograph on the page: a `master`
-   * original in photos/, that file's real width and height, alt text describing the job, and a
-   * `sizes` hint for the cell it fills. The same pipeline generates what the page loads, so an
-   * entry that is filled in gains a WebP ladder like any other photograph. While it is null the
-   * entry renders as a typographic panel — the section stands on its own structure instead of on
-   * a photograph of somebody else's house. Nothing here may name an image the business does not
-   * own.
+   * `job` and `illustration` are drawn on every entry, because the difference between a photograph
+   * and a drawing is the one thing a visitor cannot tell by looking — and it is the thing that
+   * decides whether the section is evidence or an example. `job` says the picture is the business's
+   * own without claiming it is a paid job, which the business has not said of every frame here.
+   * `note` says it again in a sentence, and goes the day there are no drawn pairs left.
+   */
+  labels: {
+    before: 'Before',
+    after: 'After',
+    compare: 'Compare before and after',
+    job: 'Our photo',
+    illustration: 'Illustration',
+    note: 'Illustrations show the kind of work we do, not a customer’s home. Drag a pair to compare.',
+  },
+  /**
+   * The rooms, in the order the section shows them: photographs first, then drawn pairs.
+   *
+   * An entry carries **either** `photos` — one or more frames of one room, each of which may itself
+   * hold the before and after side by side if that is how the visit was photographed — **or**
+   * `before` and `after`, which the page puts on one sliding handle. Both shapes take the same
+   * descriptor: a `master` original in photos/, that file's real width and height, alt text
+   * describing what is in the frame, and a `sizes` hint for the box it fills. The pipeline
+   * generates what the page loads from the master, so a photograph dropped in here gains a WebP
+   * ladder like any other image on the page.
+   *
+   * Photographs are shown whole: their own shape, in a row of frames of one height, never cropped
+   * to a cell and never scaled past their own pixels. That is why they are not in the comparison
+   * grid — those cells are one shape because a slider only reads as one room while both sides are
+   * cropped the same way, and a photograph cropped to fit a grid stops being evidence of what was
+   * actually there.
+   *
+   * The drawn pairs are illustrations, not photographs of a customer's home: a script draws them
+   * and both labels say so. They are here to show the standard this business works to, which is a
+   * promise about the work rather than a claim about a job. Nothing here may name an image the
+   * business does not own.
    */
   items: [
-    { tag: 'Residential', caption: 'Soft, serene, spotless.', size: 'large', photo: null },
-    { tag: 'Kitchen reset', caption: 'Counters you can breathe on.', photo: null },
-    { tag: 'Bedroom detail', caption: 'That fresh-sheet feeling.', photo: null },
-    { tag: 'Commercial', caption: 'Make an entrance.', photo: null },
+    {
+      tag: 'Residential',
+      caption: 'A living room, an afternoon apart.',
+      detail: 'Laundry can be added when your home has a washer and dryer.',
+      photos: [
+        {
+          master: 'photos/work/living-room.png',
+          alt: 'Two photographs of the same living room side by side: on the left, clothes, bags and boxes spread across the carpet; on the right, the room cleared, the rug uncovered and the cushions straightened',
+          width: 728,
+          height: 487,
+          /** The photo is shown at its own width at most — its caption takes the space beside it
+              — and the section's gutters leave 89vw on a phone. */
+          sizes: '(max-width: 700px) 89vw, 728px',
+        },
+      ],
+    },
+    {
+      tag: 'Kitchen reset',
+      caption: 'Cleared, wiped, sanitized.',
+      detail: 'Surfaces, cooktop and all, are wiped and sanitized as standard. Dishwashing is not included, and can be added for an extra fee.',
+      photos: [
+        {
+          master: 'photos/work/kitchen-reset.png',
+          alt: 'Two photographs of the same kitchen stacked, before and after a clean: above, the counters and island crowded with dishes, packets and bottles; below, the same kitchen wiped clean, the counters clear and the pendant lights on',
+          width: 860,
+          height: 1146,
+          /** A row fills the section's width, so each frame's share is its own ratio over the sum of
+              the row's ratios — 0.752 of 1.752 here, which is 37vw of the page. */
+          sizes: '(max-width: 700px) 89vw, 37vw',
+        },
+        {
+          master: 'photos/work/kitchen-cooktop.png',
+          alt: 'Two photographs of the same glass cooktop stacked: above, the rings smeared and marked with burnt-on grease; below, the glass wiped clear and reflecting the kitchen behind it',
+          width: 728,
+          height: 728,
+          sizes: '(max-width: 700px) 89vw, 49vw',
+        },
+      ],
+    },
+    {
+      tag: 'Bathroom detail',
+      caption: 'Down to the limescale.',
+      detail: 'Three details from one bathroom on a deep clean: the faucet descaled, the glass cleared, the shower base scrubbed back to white.',
+      photos: [
+        {
+          master: 'photos/work/bathroom-tap.png',
+          alt: 'Two photographs of the same faucet stacked: above, the chrome dulled by limescale and water spots; below, the same faucet polished and reflecting the room',
+          width: 728,
+          height: 943,
+          sizes: '(max-width: 700px) 89vw, 26vw',
+        },
+        {
+          master: 'photos/work/bathroom-shower.png',
+          alt: 'Two photographs of the same glass shower screen side by side: on the left, the glass clouded with soap film; on the right, the same screen clear, with the towel bar sharp against the tiles',
+          width: 728,
+          height: 728,
+          sizes: '(max-width: 700px) 89vw, 34vw',
+        },
+        {
+          master: 'photos/work/bathroom-tray.png',
+          alt: 'Two photographs of the same shower base stacked: above, the base dull and mottled with soap scum around the drain; below, the same base clean and white',
+          width: 728,
+          height: 978,
+          sizes: '(max-width: 700px) 89vw, 25vw',
+        },
+      ],
+    },
+    {
+      tag: 'Bedroom detail',
+      caption: 'That fresh-sheet feeling.',
+      before: {
+        master: 'photos/work/bedroom-before.png',
+        alt: 'Illustration of a bedroom before a clean: an unmade bed, a crushed pillow on the floor, clothes piled beside the nightstand and a lamp left switched off',
+        width: 960,
+        height: 720,
+        sizes: '(max-width: 620px) 89vw, 43vw',
+      },
+      after: {
+        master: 'photos/work/bedroom-after.png',
+        alt: 'Illustration of the same bedroom after a clean: the bed made with the duvet folded back, two pillows plumped, and the lamp lit on a clear nightstand',
+        width: 960,
+        height: 720,
+        sizes: '(max-width: 620px) 89vw, 43vw',
+      },
+    },
+    {
+      tag: 'Commercial',
+      caption: 'Make an entrance.',
+      before: {
+        master: 'photos/work/office-before.png',
+        alt: 'Illustration of a reception before a clean: paperwork across the desk, cups and boxes left out, cables looped on the floor and scuffed flooring',
+        width: 960,
+        height: 720,
+        sizes: '(max-width: 620px) 89vw, 43vw',
+      },
+      after: {
+        master: 'photos/work/office-after.png',
+        alt: 'Illustration of the same reception after a clean: a clear desk and monitor, chairs squared up, the plant stood straight and the floor polished',
+        width: 960,
+        height: 720,
+        sizes: '(max-width: 620px) 89vw, 43vw',
+      },
+    },
   ],
 };
 
@@ -457,6 +594,14 @@ export const faqs = {
     {
       q: 'Do you bring your own supplies?',
       a: 'Yes. We arrive with everything needed. If you would rather we use your products, let us know in the notes.',
+    },
+    {
+      q: 'Is laundry included?',
+      a: 'Not in a standard clean. If your home has a washer and dryer, we can wash and fold your clothes as an add-on, for an extra fee.',
+    },
+    {
+      q: 'Do you wash dishes?',
+      a: 'Every kitchen surface is wiped and sanitized as standard, but dishes are not part of a basic clean. You can add them for an extra fee when you book.',
     },
     {
       q: 'How far ahead should I book?',
@@ -538,7 +683,7 @@ export const openingHours = hours
 
 export const footer = {
   brandLine: site.tagline,
-  area: ['Serving the greater city', 'and surrounding suburbs.'],
+  area: ['Serving Baltimore', 'and surrounding areas.'],
   contactTitle: 'Contact',
   hoursTitle: 'Hours & area',
   exploreTitle: 'Explore',
@@ -608,10 +753,10 @@ export const links = {
 
 /**
  * Strings the browser needs at runtime: menu labels, the confirmation shown when a request is
- * handed to the visitor's own messaging app, and the labels used to compose that message.
- * script.js is a plain script with no bundler, so it cannot import this module — the build
- * serialises this block into the page as a JSON island instead, which keeps the runtime from
- * holding its own copy of the copy.
+ * handed to the visitor's own messaging app, the labels used to compose that message, and the word
+ * the before/after slider speaks as part of its value. script.js is a plain script with no bundler,
+ * so it cannot import this module — the build serialises this block into the page as a JSON island
+ * instead, which keeps the runtime from holding its own copy of the copy.
  */
 export const runtime = {
   menu: { open: ui.menuOpen, close: ui.menuClose },
@@ -650,4 +795,12 @@ export const runtime = {
     },
     fallback: { phone: 'not provided', time: 'flexible', notes: 'No additional notes.' },
   },
+  /**
+   * What the before/after slider says its value is. A range input announces a bare number — "52"
+   * on its own tells a visitor nothing about what is being compared or which side of it they are
+   * looking at — so the value the browser speaks is composed from the word the page already draws
+   * on the before side of the handle. That percentage counts the before: the handle's position is
+   * how much of the frame is still the state a cleaner walked into.
+   */
+  compare: { before: gallery.labels.before },
 };

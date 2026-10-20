@@ -1,15 +1,16 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { site, icons, runtime, ui, business, links } from './data.js';
-import { HOST, PAGES_A, PAGES_AAAA } from './dns.js';
+import { site, icons, runtime, ui, business, links, gallery } from './data.js';
+import { HOST, LINK_HOST, PAGES_A, PAGES_AAAA } from './dns.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from './social-card.js';
 import * as sections from './sections.js';
 import * as seo from './seo.js';
 import { jsonBlock, esc, GENERATED_NOTE } from './html.js';
 import { shippedFiles } from './ship.js';
-import { LINKS_FILE, LINKS_ICON_LINKS, LINKS_URL, linksHtml, linksIconLinks } from './links.js';
-import { LINK_SITE_DIR, LINK_SITE_URL, linkSiteFiles } from './link-site.js';
+import { LINKS_FILE, LINKS_ICON_LINKS, LINKS_URL, linksHtml } from './links.js';
 import { ZONE_FILE, zoneFile } from './dns.js';
+import { withTargetState } from './cloudflare.js';
+import { ACCOUNTS_FILE, accountsPage } from './accounts.js';
 import { BRAND_MARK, BRAND_MARK_STYLESHEET, ICON_FILES, ICON_LINKS, iconFiles } from './favicon.js';
 import { MAX_BYTES, photographs, servedPhotographs, unusedMasters } from './photos.js';
 import {
@@ -18,6 +19,7 @@ import {
   assertBookingOptionsMatch,
   assertBusinessFields,
   assertE164Phone,
+  assertGalleryImages,
   assertEmbeddedJsonParses,
   assertEmail,
   assertFaqMatchesPage,
@@ -167,9 +169,12 @@ function buildStyles() {
 
 const builtPage = buildPage();
 
-// Drawn once: the link page's second publication ships the same icon bytes, and two drawings of
-// the mark could disagree with each other.
+// Drawn once: the page and the icons it declares ship the same bytes, and two drawings of the mark
+// could disagree with each other.
 const iconArtifacts = iconFiles();
+
+/** The runbook, whose record table is generated rather than written: see the entry below. */
+const RUNBOOK = 'DOMAIN.md';
 
 const artifacts = {
   'index.html': builtPage,
@@ -181,30 +186,34 @@ const artifacts = {
   // copy-paste. Generated like everything else, so it cannot drift from the addresses the
   // domain check compares against.
   [ZONE_FILE]: zoneFile(),
+  // The same records as the zone file, in the shape a person reads while holding a registrar
+  // panel. Generated into the document so the table cannot drift from the values that will be
+  // written — it had drifted before, by a whole DMARC tag. Only the block between the markers is
+  // rebuilt; the prose around it is hand-written and `npm run check` leaves it alone.
+  [RUNBOOK]: withTargetState(readFileSync(RUNBOOK, 'utf8')),
+  // The other half of the runbook: who the person doing it has to log into, for what, and at which
+  // step. Generated for the reason the record table is — its "needed by" column is resolved against
+  // the runbook's own step headings, so a renamed or renumbered step fails the build here instead of
+  // sending someone to step 3 for a change step 5 needs.
+  [ACCOUNTS_FILE]: accountsPage({ runbook: readFileSync(RUNBOOK, 'utf8') }),
   // The icons are generated here rather than by a script of their own, so the check below covers
   // them like every other generated file: a committed icon that no longer matches the stylesheet
   // tokens is stale output, not a judgement call.
   ...iconArtifacts,
-  // The same page as a site of its own, for links.glamcleaners.net. Generated and drift-checked
-  // here so it cannot fall behind src/, but deliberately absent from src/ship.js: it belongs to
-  // the second repository, never to this site's upload.
-  ...linkSiteFiles(iconArtifacts),
 };
 
 // The canonicals read back out of the pages that were just built, rather than the list of pages
 // somebody meant to build: that is what makes the sitemap check two-sided.
 const canonicals = ['index.html', LINKS_FILE].map(file => between(artifacts[file], '<link rel="canonical" href="', '"')[0]);
 
-// Two addresses serve the link page and only one of them may be indexed. Both copies name the
-// apex path, so this is the guard that keeps the subdomain from quietly becoming a second page: a
-// self-canonical there would be a duplicate in every search engine's index, and nothing else in
-// the build would notice.
-const linkCanonicals = [LINKS_FILE, `${LINK_SITE_DIR}/index.html`]
-  .map(file => between(artifacts[file], '<link rel="canonical" href="', '"')[0]);
-if (linkCanonicals.some(url => url !== LINKS_URL)) {
-  throw new Error(`The link page must name ${LINKS_URL} from both addresses; the copies name ${linkCanonicals.join(' and ')}`);
+// The short address is a 301 to this page and announces itself as such, so the canonical is the
+// only address the page may claim: a self-canonical at links. would now name a redirect, and
+// nothing else in the build would notice.
+const linkCanonical = between(artifacts[LINKS_FILE], '<link rel="canonical" href="', '"')[0];
+if (linkCanonical !== LINKS_URL) {
+  throw new Error(`The link page must name ${LINKS_URL} as its canonical; it names ${linkCanonical}`);
 }
-console.log(`links page  ${LINKS_URL} from both addresses — one indexed, one short to share`);
+console.log(`links page  ${LINKS_URL} — one address, one canonical, and ${LINK_HOST} redirects to it`);
 
 assertPublishedUrlsAgree({
   html: artifacts['index.html'],
@@ -213,7 +222,7 @@ assertPublishedUrlsAgree({
 }, site);
 const listedPages = assertSitemapListsEveryPage({ sitemap: artifacts[seo.SITEMAP_FILE], pages: canonicals });
 console.log(`sitemap  ${listedPages} pages listed, each one a canonical this build emitted`);
-console.log(`dns  ${ZONE_FILE}  ${PAGES_A.length + PAGES_AAAA.length + 2} records for ${HOST} and ${LINK_SITE_URL.replace('https://', '').replace(/\/$/, '')}`);
+console.log(`dns  ${ZONE_FILE}  ${PAGES_A.length + PAGES_AAAA.length + 2} records for ${HOST} and ${LINK_HOST}`);
 
 // Only now that every file a crawler reads exists: the guard reads all of each one, not just the
 // canonical line, so a retired host in the share card's absolute URL is caught here too.
@@ -242,18 +251,6 @@ const publishedSummary = unreferenced.length
   ? `${unreferenced.length} referenced by nothing (${Math.round(unreferencedBytes / 1024)} KB): ${unreferenced.join(', ')}`
   : 'every file referenced';
 console.log(`published set  ${shipped.size} files — ${referenceCount} references, all ship; ${publishedSummary}`);
-
-// The second site is its own root, so the files its page names are read out of the set *it*
-// publishes rather than this site's: an icon path left behind from the `/links/` copy — one
-// directory up, where this site has nothing — would be a 404 on a phone and a green build here.
-const linkSite = linkSiteFiles(iconArtifacts);
-const linkSitePaths = new Set(Object.keys(linkSite).map(path => path.slice(LINK_SITE_DIR.length + 1)));
-const linkSiteRefs = assertReferencesShip(
-  referencedFiles({ html: artifacts[`${LINK_SITE_DIR}/index.html`] }, { url: LINK_SITE_URL }),
-  linkSitePaths,
-);
-assertIconsDeclared(artifacts[`${LINK_SITE_DIR}/index.html`], linksIconLinks(''));
-console.log(`links site  ${linkSitePaths.size} files, ${linkSiteRefs} references, none of them leaving it`);
 
 // The icons the page declares, checked against the paths just published. Both directions matter:
 // an icon nothing declares is a file a client will never ask for by that name, and a declaration
@@ -308,6 +305,13 @@ console.log(`photographs  ${pagePhotographs} in the page from ${photographs().le
 
 const unused = unusedMasters();
 console.log(`masters  ${photographs().length} in use${unused.length ? `, ${unused.length} not on the page: ${unused.join(', ')}` : ', all in use'}`);
+
+// And the section itself. It shows photographs of jobs and drawn pairs, and neither half of that
+// is visible in a review of images that all look right on their own: an entry with both kinds of
+// slot would ship a file the page never shows, and a pair whose frames disagree about their shape
+// would jump at the seam.
+const work = assertGalleryImages(gallery.items);
+console.log(`work section  ${work.photographs} photograph(s), ${work.comparisons} before/after pair(s)`);
 
 if (checkOnly) {
   const readIfPresent = name => {

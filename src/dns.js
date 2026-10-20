@@ -26,9 +26,10 @@ export const HOST = new URL(site.url).hostname;
 export const PAGES_DOMAIN = 'sgscrap.github.io';
 
 /**
- * The link page's own address. A second Pages site rather than a path, because a Pages site holds
- * one custom domain and its documentation lists an apex plus a subdomain as unsupported — so this
- * hostname points at the same Pages default domain and is served by another repository.
+ * The short address for the link page. One label under the site, so a bio can hold it — and not a
+ * second copy of the page: a redirect rule at the edge turns it into a 301 to the canonical page,
+ * and the record below only makes the name resolvable (and proxied, so Cloudflare terminates TLS
+ * for it and can apply the rule at all).
  */
 export const LINK_HOST = `links.${HOST}`;
 
@@ -58,25 +59,53 @@ export const ZONE_FILE = `dns/${HOST}.zone`;
  * The email the domain carries, as it answered on the day this was written. Values, not a
  * prescription: they are printed in the file so nobody replaces the zone without seeing what else
  * is in it, and the note beside them says where to read the real ones from.
+ *
+ * Exported because the date is part of the claim: `npm run domain` answers for these values against
+ * the live zone, and a mail record that answers differently is a provider change since that day
+ * rather than a fault — which it can only say by naming the day.
  */
-const MAIL_OBSERVED_ON = '2026-10-17';
-const MAIL_RECORDS = [
-  'MX     10 mailserver.businessidentity.llc',
-  'TXT    "v=spf1 a mx include:spf.postal.businessidentity.llc ~all"',
-  'TXT    _dmarc "v=DMARC1; p=quarantine; rua=mailto:bounce@dmarc.businessidentity.llc; fo=1"',
+export const MAIL_OBSERVED_ON = '2026-10-17';
+
+/**
+ * The mail records as values rather than as lines of text, because two renderings need them: the
+ * zone file's comment block, which is what someone pastes, and the runbook's target-state table,
+ * which is what someone checks the pasted result against. Written twice as lines, the two could
+ * disagree in a value or a quote and nothing would notice until mail stopped.
+ */
+export const MAIL_RECORDS = [
+  { type: 'MX', name: '@', value: '10 mailserver.businessidentity.llc' },
+  { type: 'TXT', name: '@', value: 'v=spf1 a mx include:spf.postal.businessidentity.llc ~all' },
+  { type: 'TXT', name: '_dmarc', value: 'v=DMARC1; p=quarantine; rua=mailto:bounce@dmarc.businessidentity.llc; ruf=mailto:bounce@dmarc.businessidentity.llc; fo=1' },
 ];
+
+/**
+ * The site's records, the shape both the zone file and the runbook table are rendered from. One
+ * list, so the file someone pastes and the table they check it against cannot say different things.
+ */
+export const SITE_RECORDS = () => [
+  ...PAGES_A.map(content => ({ type: 'A', name: '@', content })),
+  ...PAGES_AAAA.map(content => ({ type: 'AAAA', name: '@', content })),
+  // No trailing dot: this is the value the API takes and the table shows. The zone file adds the
+  // dot, because a CNAME target there is a name and `sgscrap.github.io` without one would be read
+  // as relative to the zone.
+  { type: 'CNAME', name: 'www', content: PAGES_DOMAIN },
+  { type: 'CNAME', name: 'links', content: PAGES_DOMAIN },
+];
+
+/** `@       IN  A      185.199.108.153` — the columns the zone file has always used. */
+const zoneLine = ({ name, type, content }) => `${name.padEnd(8)}IN  ${type.padEnd(7)}${type === 'CNAME' ? `${content}.` : content}`;
+
+/** `TXT    _dmarc "…"` — the same columns, with TXT quoted and MX's owner left off. */
+const zoneMailLine = ({ type, name, value }) => (type === 'MX'
+  ? `${type.padEnd(7)}${value}`
+  : `${type.padEnd(7)}${name === '@' ? '' : `${name} `}"${value}"`);
 
 /**
  * The zone file. Records only — no SOA and no NS: whoever hosts the zone owns those, and a file
  * that invented them would be wrong for every provider it was pasted into.
  */
 export const zoneFile = () => {
-  const records = [
-    ...PAGES_A.map(address => `@       IN  A      ${address}`),
-    ...PAGES_AAAA.map(address => `@       IN  AAAA   ${address}`),
-    `www     IN  CNAME  ${PAGES_DOMAIN}.`,
-    `links   IN  CNAME  ${PAGES_DOMAIN}.`,
-  ];
+  const records = SITE_RECORDS().map(zoneLine);
 
   return `; ==========================================================================
 ; ${HOST} — the records this site needs at the business's own domain
@@ -99,19 +128,21 @@ export const zoneFile = () => {
 ; forwarder), which means every subdomain already "works" and none of them
 ; serves the site. GitHub's own guidance is not to use a wildcard at all.
 ;
-; The links record is a second Pages site, not a path on this one. A Pages site
-; holds one custom domain, so the bare subdomain is a second repository
-; publishing the same page at its root — and the wildcard is exactly what would
-; keep it showing the homepage instead.
+; The links record is not a second site. It is proxied so Cloudflare sees the
+; name at all, and the redirect rule answers every request for it with a 301 to
+; /links/ before the origin is reached; the wildcard is exactly what would keep
+; it answering with the forwarder's homepage instead.
 ;
 ; This file is the site's records only. The domain also carries email, and a
 ; provider that takes this file as the whole zone would stop it:
 ;
-${MAIL_RECORDS.map(record => `;   ${record}`).join('\n')}
+${MAIL_RECORDS.map(record => `;   ${zoneMailLine(record)}`).join('\n')}
 ;
-;   ...and the DKIM records the current panel holds, which cannot be read from
-;   outside it. As observed ${MAIL_OBSERVED_ON} — copy them from the panel, not
-;   from this comment.
+;   No DKIM key is published under this domain: 153 conventional selector
+;   names (<selector>._domainkey.${HOST}) answered with no TXT, observed
+;   ${MAIL_OBSERVED_ON}. Nothing to copy, and nothing that can verify a
+;   signature under this domain. If the panel names a selector, read it with
+;   npm run dkim -- --selector <name> — the move writes any key it finds.
 ;
 ; The whole sequence, in order, with the commands and the rollback: DOMAIN.md
 ; in the repository root.

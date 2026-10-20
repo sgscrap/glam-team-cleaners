@@ -1,0 +1,17 @@
+[
+  {
+    "observed": "2026-10-17",
+    "registrar": "DomainRegistry.com LLC",
+    "ianaId": 128,
+    "statuses": [
+      "active"
+    ],
+    "registered": "2026-09-17",
+    "expires": "2027-09-17",
+    "nameservers": [
+      "ns1.hosting.businessidentity.llc",
+      "ns2.hosting.businessidentity.llc"
+    ],
+    "signed": false
+  }
+]

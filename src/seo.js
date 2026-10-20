@@ -1,4 +1,4 @@
-import { site, business, hero, services, footer, openingHours, faqs } from './data.js';
+import { site, business, hero, services, baseRate, openingHours, faqs } from './data.js';
 import { LINKS_URL } from './links.js';
 import { ICON_LINKS } from './favicon.js';
 import { esc, jsonBlock, GENERATED_NOTE } from './html.js';
@@ -33,9 +33,10 @@ export const sitemapUrl = `${site.url}/${SITEMAP_FILE}`;
  * from their one existing home, so the page and the machine-readable record cannot
  * describe the business differently.
  *
- * Deliberately absent: `address` and `geo`. No street address or coordinates exist
- * anywhere in the data, and inventing them would put a false location into search
- * results. Add both here once the real values are known.
+ * Deliberately absent: `geo` and any street address. The business works from the road, not a
+ * shopfront, so there is no address a customer can visit and no coordinates that describe where
+ * the work happens; inventing either would put a false location into search results. The city and
+ * region are real, and `areaServed` carries the same sentence the page prints in its footer.
  */
 export const structuredData = () => ({
   '@context': 'https://schema.org',
@@ -53,7 +54,14 @@ export const structuredData = () => ({
   image: `${site.url}/${largestPath(hero.image)}`,
   slogan: site.tagline,
   foundingDate: String(site.founded),
-  areaServed: footer.area.join(' '),
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: site.city,
+    addressRegion: 'MD',
+    addressCountry: 'US',
+  },
+  areaServed: site.serviceArea,
+  priceRange: `$${baseRate.perHour}+ per hour`,
   openingHours,
   sameAs: [site.instagram],
   hasOfferCatalog: {

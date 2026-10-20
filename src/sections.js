@@ -41,18 +41,85 @@ const intro = section => `<div class="section-intro">
  * without it the browser assumes the image spans the viewport and fetches the widest file always,
  * which is the download this pipeline exists to stop.
  */
-const img = (photo, { lazy = true, high = false } = {}) =>
-  `<img src="${esc(largestPath(photo))}" srcset="${esc(srcset(photo))}" sizes="${esc(photo.sizes)}" alt="${esc(photo.alt)}"${lazy ? ' loading="lazy"' : ''} width="${esc(photo.width)}" height="${esc(photo.height)}"${high ? ' fetchpriority="high"' : ''}>`;
+const img = (photo, { lazy = true, high = false, className = '' } = {}) =>
+  `<img${className ? ` class="${esc(className)}"` : ''} src="${esc(largestPath(photo))}" srcset="${esc(srcset(photo))}" sizes="${esc(photo.sizes)}" alt="${esc(photo.alt)}"${lazy ? ' loading="lazy"' : ''} width="${esc(photo.width)}" height="${esc(photo.height)}"${high ? ' fetchpriority="high"' : ''}>`;
 
 /**
- * A portfolio cell. `photo` holds a photograph of a job this business did; while an entry has
- * none, the cell is set in type rather than filled with a stock image of somebody else's room.
- * The index is decorative — the caption already names what the entry is.
+ * What kind of entry this is, in the words drawn on the caption. A photograph of a room this
+ * business cleaned and a drawing of a room it could clean are the same size in the layout and
+ * completely different claims, so every entry says which one it is.
  */
-const portfolioCell = (item, index) => {
-  const classes = [item.photo ? 'has-photo' : 'no-photo', item.size === 'large' ? 'work-large' : ''].filter(Boolean);
-  const media = item.photo ? img(item.photo) : `<span class="cell-index" aria-hidden="true">${pad2(index + 1)}</span>`;
-  return `<figure class="${classes.join(' ')}">${media}<figcaption>${esc(item.tag)} <strong>${esc(item.caption)}</strong></figcaption></figure>`;
+const workKind = item =>
+  `${esc(item.photos ? gallery.labels.job : gallery.labels.illustration)} · ${esc(item.tag)}`;
+
+/**
+ * The photographs of one finished visit, whole, in one row that fills the width.
+ *
+ * They are deliberately not cells in the comparison grid. Those cells are one fixed shape, because
+ * a comparison only reads as one room while both sides are cropped the same way — and a portrait
+ * photograph put through that crop would lose half of what it shows. A photograph taken to fit a
+ * grid stops being evidence of what was actually there, which is the one thing it is on this page
+ * for.
+ *
+ * The row's height comes from the frames themselves: each frame grows in proportion to its own
+ * aspect ratio, and the set carries the sum of those ratios as its `aspect-ratio`. So a row of a
+ * portrait, a square and a portrait fills the width with no crop and no letterbox, and one height
+ * across the row keeps a tall frame from becoming a thumbnail. A single photograph is capped at its
+ * master's width — it is shown as large as its own pixels allow and no larger — and its caption sits
+ * beside it, where there is room.
+ */
+const workPhoto = item => {
+  const ratios = item.photos.map(photo => photo.width / photo.height);
+  const setRatio = ratios.reduce((sum, value) => sum + value, 0).toFixed(3);
+  const single = item.photos.length === 1;
+  const cap = single ? `; --set-max: ${item.photos[0].width}px` : '';
+  return `<figure class="work-photo" data-count="${item.photos.length}" style="--set-ratio: ${setRatio}${cap}">
+<div class="work-photo-set">
+${item.photos
+  .map((photo, index) => `<div class="work-photo-frame" style="--photo-ratio: ${ratios[index].toFixed(3)}">${img(photo, { className: 'work-photo-image' })}</div>`)
+  .join('\n')}
+</div>
+<figcaption>
+<span class="work-kind">${workKind(item)}</span>
+<strong class="work-caption">${esc(item.caption)}</strong>
+${item.detail ? `<p class="work-detail">${esc(item.detail)}</p>` : ''}
+</figcaption>
+</figure>`;
+};
+
+/**
+ * A drawn pair on a sliding handle, or — while an entry has no image of its own — a panel set in
+ * type, so the section keeps its shape instead of showing a gap.
+ *
+ * The control is a real `<input type="range">` laid over the frame rather than a div with pointer
+ * handlers: it is focusable, it takes the arrow keys, and a screen reader announces it as a value,
+ * which is the whole of the interaction here. The handle the eye sees is a sibling that follows
+ * the input's value through one custom property — `--reveal` — so the drawing and the control
+ * cannot disagree about where the edge is. The "before" image is the layer underneath and the
+ * "after" one is clipped from that edge rightward, which is why the labels read in the order the
+ * slider runs.
+ */
+const workCell = (item, index) => {
+  const caption = `<figcaption>
+<span class="work-kind">${workKind(item)}</span>
+<strong class="work-caption">${esc(item.caption)}</strong>
+</figcaption>`;
+  if (!(item.before && item.after)) {
+    return `<figure class="work-cell work-cell-empty">
+<div class="cell-frame"><span class="cell-index" aria-hidden="true">${pad2(index + 1)}</span></div>
+${caption}</figure>`;
+  }
+  return `<figure class="work-cell compare" style="--reveal: 52%">
+<div class="cell-frame">
+${img(item.before, { className: 'cell-image compare-before' })}
+${img(item.after, { className: 'cell-image compare-after' })}
+<span class="compare-edge" aria-hidden="true"></span>
+<span class="compare-grip" aria-hidden="true"><i></i><i></i></span>
+<span class="compare-label compare-label-before" aria-hidden="true">${esc(gallery.labels.before)}</span>
+<span class="compare-label compare-label-after" aria-hidden="true">${esc(gallery.labels.after)}</span>
+<input class="compare-range" type="range" min="0" max="100" value="52" step="1" aria-label="${esc(gallery.labels.compare)}: ${esc(item.tag)}">
+</div>
+${caption}</figure>`;
 };
 
 const brandBlock = () =>
@@ -87,6 +154,7 @@ ${title(hero, { level: 'h1' })}
 <span class="stars" aria-hidden="true">${esc(hero.rating.stars)}</span>
 <span><strong>${esc(hero.rating.value)}</strong><small>${esc(hero.rating.note)}</small></span>
 </div>
+<p class="hero-area">Serving ${esc(site.serviceArea)}</p>
 </div>
 <div class="hero-art">
 <div class="hero-photo">${img(hero.image, { lazy: false, high: true })}</div>
@@ -150,12 +218,23 @@ ${process.steps.map((step, index) => `<li><span aria-hidden="true">${pad2(index 
 </ol>
 </section>`;
 
-export const gallerySection = () => `<section class="work section-pad" id="work">
+export const gallerySection = () => {
+  // Photographs first, then the drawn pairs: the section leads with what the business has actually
+  // done and finishes with the standard it works to, and the visitor reads the distinction from
+  // the label on each entry rather than from the order.
+  const photographs = gallery.items.filter(item => item.photos);
+  const cells = gallery.items.filter(item => !item.photos);
+  return `<section class="work section-pad" id="work">
 ${intro(gallery)}
-<div class="work-grid">
-${gallery.items.map(portfolioCell).join('\n')}
-</div>
+${photographs.length ? `<div class="work-photos">
+${photographs.map(workPhoto).join('\n')}
+</div>` : ''}
+${cells.length ? `<div class="work-grid">
+${cells.map(workCell).join('\n')}
+</div>` : ''}
+<p class="work-note">${esc(gallery.labels.note)}</p>
 </section>`;
+};
 
 export const teamSection = () => `<section class="team section-pad" id="team">
 <div class="team-copy">

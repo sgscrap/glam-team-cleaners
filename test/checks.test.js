@@ -20,7 +20,7 @@ import { join } from 'node:path';
 
 import * as checks from '../src/checks.js';
 import * as seo from '../src/seo.js';
-import { site, business, icons, runtime, faqs } from '../src/data.js';
+import { site, business, icons, runtime, faqs, gallery } from '../src/data.js';
 import { SOCIAL_CARD_PROVENANCE_KEYWORD, socialCardSource } from '../src/social-card.js';
 import { esc } from '../src/html.js';
 import { ENTRY_FILES, shippedFiles } from '../src/ship.js';
@@ -307,6 +307,74 @@ const CASES = [
     ],
   },
   {
+    guard: 'assertGalleryImages',
+    accepts: [
+      {
+        why: 'the real work section',
+        run: () => checks.assertGalleryImages(gallery.items),
+        expect: counts => assert.deepEqual(counts, {
+          photographs: gallery.items.flatMap(item => item.photos ?? []).length,
+          comparisons: gallery.items.filter(item => item.before).length,
+        }),
+      },
+      {
+        why: 'an entry with no image of its own',
+        run: () => checks.assertGalleryImages([{ tag: 'Residential' }]),
+        expect: counts => assert.deepEqual(counts, { photographs: 0, comparisons: 0 }),
+      },
+      {
+        why: 'one photograph of a whole room, portrait',
+        run: () => checks.assertGalleryImages([
+          { tag: 'Kitchen', photos: [{ master: 'a.png', width: 1200, height: 1599 }] },
+        ]),
+        expect: counts => assert.deepEqual(counts, { photographs: 1, comparisons: 0 }),
+      },
+      {
+        why: 'three photographs of one room, counted as three',
+        run: () => checks.assertGalleryImages([
+          {
+            tag: 'Bathroom detail',
+            photos: [
+              { master: 'a.png', width: 728, height: 943 },
+              { master: 'b.png', width: 728, height: 728 },
+              { master: 'c.png', width: 728, height: 978 },
+            ],
+          },
+        ]),
+        expect: counts => assert.deepEqual(counts, { photographs: 3, comparisons: 0 }),
+      },
+      {
+        why: 'two frames of one shape at different sizes',
+        run: () => checks.assertGalleryImages([
+          { tag: 'Kitchen', before: { master: 'a.png', width: 960, height: 720 }, after: { master: 'b.png', width: 480, height: 360 } },
+        ]),
+        expect: counts => assert.deepEqual(counts, { photographs: 0, comparisons: 1 }),
+      },
+    ],
+    rejects: [
+      ['a pair whose frames are different shapes', () => checks.assertGalleryImages([
+        { tag: 'Kitchen', before: { master: 'photos/work/bedroom-before.png', width: 960, height: 720 }, after: { master: 'photos/work/bedroom-after.png', width: 800, height: 720 } },
+      ]), /Kitchen compares photos\/work\/bedroom-before\.png \(960x720\) with photos\/work\/bedroom-after\.png \(800x720\), and two frames of different shapes are cropped differently/],
+      ['an entry with only the before side', () => checks.assertGalleryImages([
+        { tag: 'Bedroom detail', before: { master: 'photos/work/bedroom-before.png', width: 960, height: 720 }, after: null },
+      ]), /Bedroom detail has a before photograph and no after, so the entry would render as a panel and the photograph would leave the page/],
+      ['an entry with only the after side', () => checks.assertGalleryImages([
+        { tag: 'Commercial', before: null, after: { master: 'photos/work/office-after.png', width: 960, height: 720 } },
+      ]), /Commercial has an after photograph and no before, so the entry would render as a panel and the photograph would leave the page/],
+      ['an entry holding photographs and a pair at once', () => checks.assertGalleryImages([
+        {
+          tag: 'Kitchen',
+          photos: [{ master: 'photos/work/kitchen-reset.png', width: 1200, height: 1599 }],
+          before: { master: 'photos/work/bedroom-before.png', width: 960, height: 720 },
+          after: { master: 'photos/work/bedroom-after.png', width: 960, height: 720 },
+        },
+      ]), /Kitchen has photographs and a before\/after pair, and the page can only show one of them/],
+      ['an entry with an empty photograph list', () => checks.assertGalleryImages([
+        { tag: 'Bathroom detail', photos: [] },
+      ]), /Bathroom detail has an empty photograph list, so the entry would render a caption over nothing/],
+    ],
+  },
+  {
     guard: 'assertHookNeedsNoInstall',
     accepts: [
       {
@@ -542,8 +610,8 @@ const CASES = [
     guard: 'assertRuntimeConfigKeys',
     accepts: [{ why: 'the real runtime config', run: () => checks.assertRuntimeConfigKeys(runtime) }],
     rejects: [
-      ['an island that was never emitted', () => checks.assertRuntimeConfigKeys(undefined), /missing what script\.js reads: menu, success, handoff/],
-      ['an island missing one key', () => checks.assertRuntimeConfigKeys({ menu: {}, success: {} }), /missing what script\.js reads: handoff/],
+      ['an island that was never emitted', () => checks.assertRuntimeConfigKeys(undefined), /missing what script\.js reads: menu, success, handoff, compare/],
+      ['an island missing one key', () => checks.assertRuntimeConfigKeys({ menu: {}, success: {} }), /missing what script\.js reads: handoff, compare/],
     ],
   },
   {

@@ -29,10 +29,6 @@ const STYLESHEET = 'src/links.css';
  * The icons this page declares. Spelled here rather than reusing ICON_LINKS because the paths are
  * relative to the page instead of the site root — and the build asserts the page declares exactly
  * these, so a path that only works from one directory cannot slip through.
- *
- * The prefix is a parameter because this page is published twice: at `/links/`, one directory below
- * the site root, and at the root of its own subdomain. Both addresses must name files that really
- * sit beside them, and neither may borrow the other's paths.
  */
 export const linksIconLinks = prefix => [
   { rel: 'icon', href: `${prefix}favicon.ico`, sizes: '16x16 32x32 48x48' },
@@ -70,10 +66,10 @@ ${icon(name)}
  * could be wrong — an address that does not match the card — is checked at build time instead of
  * repaired in the browser.
  *
- * `canonical` and `prefix` are what the second publication of this page changes: the subdomain's
- * copy is its own root, so its files sit beside it rather than one directory up, and its address is
- * the bare host. Everything below that — the copy, the numbers, the channels — is one source, so
- * the two addresses cannot drift apart.
+ * `prefix` is the depth of `/links/`, one directory below the site root: every asset the page
+ * names has to sit relative to it, and the build checks that each one really does. `canonical` is
+ * the one address this page claims — the short hostname 301s here, so a canonical naming anything
+ * else would point at a redirect.
  */
 export const linksHtml = ({ canonical = LINKS_URL, prefix = '../' } = {}) => `<!doctype html>
 <!-- ${GENERATED_NOTE} Built from src/data.js and src/links.css. -->

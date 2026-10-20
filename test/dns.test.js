@@ -49,9 +49,9 @@ test('the zone carries the apex, www and links records, and nothing else', () =>
   const www = records.filter(line => line.startsWith('www '));
   assert.deepEqual(www, [`www     IN  CNAME  ${PAGES_DOMAIN}.`], 'www is a CNAME, and a CNAME cannot sit beside an A record');
 
-  // The link page's own host. It points at the Pages default domain like www does, because it is a
-  // second Pages site: GitHub gives each site one custom domain, so a bare subdomain cannot ride
-  // on the first site's.
+  // The link page's own host. It still points at the Pages default domain like www does, and that
+  // is only an origin: the name is proxied, so the redirect rule answers before the request gets
+  // there. The page it used to serve was a second Pages site, and that site is retired.
   assert.equal(LINK_HOST, 'links.glamcleaners.net');
   assert.equal(LINK_HOST, `links.${HOST}`, 'the subdomain is this domain, not a lookalike');
   const links = records.filter(line => line.startsWith('links '));

@@ -8,7 +8,12 @@
   --ink-soft: #6f5f61;
   --ivory: #fcfaf6;
   --linen: #f4eee8;
-  --taupe: #b3a39b;
+  /* Small text, so it has to clear 4.5:1 on both --ivory and --linen: #b3a39b, the old value, sat
+     at 2.1–2.3 and was the only thing failing an accessibility audit. Decorative lines use --line
+     and are unaffected. */
+  --taupe: #75625a;
+  /* The same muted role on the dark cards, where the value above would disappear. */
+  --taupe-light: #c9bab6;
   --rose: #c86c82;
   --rose-deep: #9f4e64;
   --champagne: #e9d7be;
@@ -182,6 +187,9 @@ h1 em, h2 em {
 .hero-proof strong, .hero-proof small { display: block; }
 .hero-proof strong { color: var(--ink); font: 500 10px var(--mono); }
 .hero-proof small { font-size: 10px; }
+/* Where the business works, in the first screen: a visitor decides whether to keep reading on the
+   question of coverage, and the footer is too late to answer it. */
+.hero-area { margin-top: 16px; font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--taupe); }
 
 .hero-art { position: relative; height: 496px; }
 .hero-photo { height: 100%; overflow: hidden; }
@@ -274,6 +282,7 @@ h1 em, h2 em {
 .price-amount { display: flex; align-items: baseline; gap: 9px; }
 .price-amount strong { font: 600 40px/1 var(--serif); letter-spacing: -0.06em; }
 .price-amount small { font: 9.5px var(--mono); text-transform: uppercase; color: var(--taupe); }
+.price-featured .price-amount small { color: var(--taupe-light); }
 .price-for { font-size: 12.5px; color: var(--ink-soft); }
 .price-featured .price-for { color: #c9bab6; }
 .price-list { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 20px; padding: 20px 0 0; border-top: 1px solid var(--line); list-style: none; }
@@ -314,26 +323,86 @@ h1 em, h2 em {
 .process-steps p { color: #bba9a6; font-size: 12.5px; }
 
 /* ==========================================================================
-   Work
+   Work — recent visits, and the standard we work to
    ========================================================================== */
-.work-grid { display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: 250px; gap: 16px; }
-.work-grid figure { position: relative; margin: 0; overflow: hidden; border-radius: var(--radius-md); }
-/* The asymmetric cell only earns its double height when it has a photograph in it — an empty
-   panel spanning two rows is a large rectangle of nothing — and it takes the shape back the
-   moment the first real photo lands. */
-.work-grid .work-large.has-photo { grid-row: span 2; }
-.work-grid .has-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 42%, rgba(28, 18, 21, 0.72)); }
-.work-grid img { transition: transform 0.5s; }
-.work-grid figure:hover img { transform: scale(1.04); }
-.work-grid figcaption { position: absolute; z-index: 1; bottom: 18px; left: 20px; right: 20px; color: #fff; font: 9px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
-.work-grid figcaption strong { display: block; margin-top: 5px; font: 600 17px var(--serif); letter-spacing: -0.03em; text-transform: none; }
+/* A photograph of a finished visit is shown whole, and as large as the width allows. It is the
+   evidence, so it keeps its own shape and is never scaled past its own pixels: each frame grows in
+   proportion to its aspect ratio while the set carries the sum of those ratios, which is what makes
+   a mixed row fill the width with nothing cropped and nothing letterboxed. A single photograph is
+   capped at its master's width — see src/sections.js — and set beside its caption. */
+.work-photos { display: grid; gap: 46px; margin-bottom: 48px; max-width: 1240px; }
+.work-photo { margin: 0; }
+.work-photo-set { display: flex; gap: 14px; aspect-ratio: var(--set-ratio); }
+.work-photo-frame { flex: var(--photo-ratio) 1 0; min-width: 0; }
+.work-photo-image { width: 100%; height: 100%; border-radius: var(--radius-md); }
+.work-photo[data-count="1"] { display: flex; flex-wrap: wrap; align-items: center; gap: 40px; }
+.work-photo[data-count="1"] .work-photo-set { flex: 0 1 auto; width: 100%; max-width: var(--set-max); }
+.work-photo[data-count="1"] figcaption { flex: 1 1 260px; max-width: 420px; }
+.work-photo figcaption { margin-top: 20px; max-width: 620px; }
 
-/* An entry with no photograph of its own. Same cell, same caption, same corner — the section
-   keeps its structure and simply declines to show a picture the business cannot back up. */
-.work-grid .no-photo { background: var(--ivory); border: 1px solid var(--line); }
-.work-grid .no-photo figcaption { color: var(--ink); }
-.work-grid .no-photo figcaption strong { font-size: 26px; }
-.cell-index { position: absolute; top: 16px; right: 20px; font: 11px var(--mono); letter-spacing: 0.16em; color: var(--rose-deep); }
+/* What kind of entry this is — a recent job or an illustration — and the line it captions. Both
+   carry it, because the difference between a room this business cleaned and a room it could clean
+   is the one thing a visitor cannot tell by looking. */
+.work-kind { display: block; font: 9px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--rose-deep); }
+.work-caption { display: block; margin-top: 7px; font: 600 20px var(--serif); letter-spacing: -0.02em; }
+.work-photo .work-caption { font-size: 27px; }
+.work-detail { margin-top: 9px; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
+
+/* The drawn pairs. Every cell is the same shape because the comparison crops both sides the same
+   way; a cell that cropped one side differently from the other would say the room changed shape. */
+.work-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px 16px; max-width: 1240px; }
+.work-cell { margin: 0; }
+.cell-frame { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: var(--radius-md); background: var(--linen); }
+.cell-frame > img { position: absolute; inset: 0; }
+.work-cell figcaption { margin-top: 16px; }
+
+/* The pair itself. `--reveal` is the one value the control and the drawing share: the "after"
+   image is clipped from that edge rightward and the handle is dropped on it, so a value the input
+   reports and the edge the eye sees are the same number by construction. */
+.compare-after { clip-path: inset(0 0 0 var(--reveal, 52%)); }
+.compare-edge {
+  position: absolute; top: 0; bottom: 0; left: var(--reveal, 52%); width: 2px; margin-left: -1px;
+  background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 14px rgba(28, 18, 21, 0.4); pointer-events: none;
+}
+.compare-grip {
+  position: absolute; top: 50%; left: var(--reveal, 52%); width: 42px; height: 42px;
+  margin: -21px 0 0 -21px; border-radius: var(--radius-pill);
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  background: var(--ivory); box-shadow: var(--shadow-md); pointer-events: none;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.compare-grip i { width: 2px; height: 13px; border-radius: 2px; background: var(--rose-deep); }
+.compare:hover .compare-grip { transform: scale(1.06); }
+/* The range is invisible and covers the frame: it is the control, and the handle above is what the
+   visitor reads it by. Nothing else here is focusable, so the focus ring has to be drawn on the
+   handle — an outline on an invisible input is an outline nobody sees. */
+.compare-range {
+  position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; margin: 0;
+  appearance: none; -webkit-appearance: none; background: transparent; cursor: ew-resize;
+}
+.compare-range:focus { outline: none; }
+.compare-range::-webkit-slider-thumb { -webkit-appearance: none; width: 46px; height: 100%; background: transparent; }
+.compare-range::-moz-range-thumb { width: 46px; height: 100%; border: 0; background: transparent; }
+.compare:focus-within .compare-grip { box-shadow: 0 0 0 3px var(--rose), var(--shadow-md); }
+.compare:focus-within .compare-edge { background: var(--champagne); }
+
+.compare-label {
+  position: absolute; top: 14px; z-index: 2; padding: 5px 10px; border-radius: var(--radius-pill);
+  color: #fff; font: 8.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  pointer-events: none;
+}
+.compare-label-before { left: 14px; background: rgba(28, 18, 21, 0.52); }
+.compare-label-after { right: 14px; background: rgba(159, 78, 100, 0.86); }
+
+/* An entry with no image of its own. Same cell, same caption — the section keeps its structure and
+   simply declines to show a picture the business cannot back up. */
+.work-cell-empty .cell-frame { display: grid; place-items: center; border: 1px solid var(--line); background: var(--ivory); }
+.cell-index { font: 11px var(--mono); letter-spacing: 0.16em; color: var(--rose-deep); }
+
+/* The line under the grid. Not decoration: the captions above it read as work, and this is what
+   tells a visitor the drawn pairs are illustrations of what this business can do rather than
+   photographs of jobs it has done — and how to work the handle. */
+.work-note { margin-top: 26px; color: var(--ink-soft); font: 9.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* ==========================================================================
    Team
@@ -534,9 +603,16 @@ textarea:focus-visible, summary:focus-visible {
 
   .trust-strip { padding-top: 40px; padding-bottom: 40px; }
 
-  .work-grid { grid-template-columns: 1fr; grid-auto-rows: 240px; }
-  .work-grid .work-large.has-photo { grid-row: span 1; }
-  .work-grid .no-photo figcaption strong { font-size: 22px; }
+  .work-photo-set { display: grid; grid-template-columns: 1fr; gap: 12px; aspect-ratio: auto; }
+  .work-photo-frame { flex: none; }
+  .work-photo-image { width: 100%; height: auto; }
+  .work-photo[data-count="1"] { display: block; }
+  .work-photo[data-count="1"] .work-photo-set { width: 100%; }
+  .work-grid { grid-template-columns: 1fr; }
+  .work-photo .work-caption { font-size: 22px; }
+  .work-caption { font-size: 18px; }
+  .compare-grip { width: 36px; height: 36px; margin: -18px 0 0 -18px; }
+  .compare-label { top: 12px; padding: 4px 8px; }
   .checklist { grid-template-columns: 1fr; gap: 20px; }
   .process-steps { grid-template-columns: 1fr; }
 

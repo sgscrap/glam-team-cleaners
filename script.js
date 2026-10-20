@@ -10,6 +10,7 @@ const config = JSON.parse(document.getElementById('runtime-config')?.textContent
 const handoff = config.handoff ?? {};
 const handoffLabels = handoff.labels ?? {};
 const handoffFallback = handoff.fallback ?? {};
+const compareLabels = config.compare ?? {};
 
 const header = document.querySelector('.site-header');
 const menuToggle = document.querySelector('.menu-toggle');
@@ -64,6 +65,27 @@ document.querySelectorAll('[data-service]').forEach(link => {
     if (bookingForm?.classList.contains('is-sent')) setFormState(null);
     if (serviceSelect) serviceSelect.value = link.dataset.service;
   });
+});
+
+/* --- before/after comparisons ---
+ *
+ * The range input already does the hard part: it is focusable, it takes the arrow keys, and it
+ * reports a value. All this does is hand that value to the one custom property the edge and the
+ * handle are drawn from, and give the value something to say — a slider that announces "52" has
+ * told a screen reader nothing about what is being compared, so the number the browser speaks is
+ * composed with the word the page draws on that side of the handle. No fallback is needed for a
+ * browser without custom properties: the stylesheet draws the pair at its default reveal, which is
+ * a comparison that simply cannot be moved.
+ */
+document.querySelectorAll('.compare').forEach(figure => {
+  const range = figure.querySelector('.compare-range');
+  if (!range) return;
+  const reveal = () => {
+    figure.style.setProperty('--reveal', `${range.value}%`);
+    if (compareLabels.before) range.setAttribute('aria-valuetext', `${range.value}% ${compareLabels.before}`);
+  };
+  range.addEventListener('input', reveal);
+  reveal();
 });
 
 /* --- no past dates --- */

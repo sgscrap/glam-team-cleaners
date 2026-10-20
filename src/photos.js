@@ -6,6 +6,13 @@
  * everything in assets/ mean "published" — a file a visitor or a crawler actually fetches — and
  * it is why the masters are not simply left beside their derivatives.
  *
+ * A master is usually a photograph. The ones under photos/work/ are not: they are drawings
+ * produced by scripts/work-illustrations.py, which is where the work section's before/after pairs
+ * come from — illustrations of the work the business does, standing in until there are photographs
+ * of jobs it has done. This pipeline does not care which it is — a master is a PNG of a known
+ * size, and both kinds get the same ladder — but the difference is why that folder can be
+ * regenerated from a script and the portraits cannot.
+ *
  * Two things this pipeline fixes, in order of how much they weigh:
  *
  * 1. Format. These masters are 356-621 KB PNGs, which is the wrong container for a photograph
@@ -56,13 +63,15 @@ export const QUALITY = 82;
 export const MAX_BYTES = 120 * 1024;
 
 /**
- * Every photograph the page shows, in document order. The gallery contributes nothing until a
- * real photograph is set on an entry, which is the honest state of a portfolio with no pictures.
+ * Every image the page shows, in document order. A gallery entry contributes its photographs or a
+ * pair of them, never both: every frame is in the page at once, so every one is a master this
+ * pipeline has to generate, counts against the weight budget, and gets measured by the geometry
+ * guard.
  */
 export const photographs = () => [
   hero.image,
   team.portrait,
-  ...gallery.items.map(item => item.photo).filter(Boolean),
+  ...gallery.items.flatMap(item => (item.photos ? item.photos : [item.before, item.after].filter(Boolean))),
 ];
 
 const served = master => master.replace(`${MASTER_DIRECTORY}/`, `${SERVED_DIRECTORY}/`);

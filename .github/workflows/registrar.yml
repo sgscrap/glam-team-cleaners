@@ -1,0 +1,86 @@
+name: Registrar
+
+# The only guard here that runs on a clock instead of a push.
+#
+# Every other check in this repository is triggered by a change: `check.yml` compares the generated
+# artifacts and runs the guard suite on every push and pull request. None of that can notice a date.
+# The domain expires on the day it expires whether or not anyone commits, so the runbook's one dated
+# fact needs a runner that does not wait to be asked.
+#
+# Daily, because the check fails when the expiry enters a 60-day window: a weekly schedule would
+# shrink that warning to as little as 54 days, and a monthly one to 31.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # A failing run files an issue: a red workflow on a schedule is a CI email, which is the
+  # notification most likely to be filtered, and the domain does not send a second notice.
+  issues: write
+
+jobs:
+  renewal:
+    name: The domain is not close to expiring, and its status has not changed
+    runs-on: ubuntu-latest
+    env:
+      VERDICT: registrar-verdict.txt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Read-only against the registry: no token, no secret, nothing to rotate. The exit status is
+      # the verdict — 1 when the expiry is inside the window, has passed, the status differs from
+      # `src/registrar.js`, or RDAP could not be read at all. The output is kept for the issue and
+      # the job summary; `pipefail` keeps the exit status of npm, not of tee.
+      - name: Read the registrar from RDAP
+        id: check
+        run: |
+          set -o pipefail
+          npm run registrar:check 2>&1 | tee "$VERDICT"
+
+      # `failure()` rather than a step-level `continue-on-error`: the job still fails, which is what
+      # the schedule is watched for, and the verdict goes where a person will actually see it. The
+      # issue is found by its title, so every failing run updates one issue instead of filing a new
+      # one each morning.
+      #
+      # Narrowed to the check's own outcome: a failed checkout or setup has no verdict to report and
+      # must not open an issue claiming the domain needs attention.
+      - name: File or update the issue
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run registrar:issue -- --verdict "$VERDICT"
+
+      # A passing run closes it with the verdict that closed it. Without this an issue opened by a
+      # renewal warning would stay open after the renewal, which teaches people to ignore it.
+      - name: Close the issue when the date is not due
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run registrar:issue -- --recovered --verdict "$VERDICT"
+
+      # A scheduled workflow that stops running is the same silence this job exists to remove: GitHub
+      # disables schedules after 60 days without repository activity, and a fork or a renamed default
+      # branch starts with none at all. This says when the schedule was last seen working, so an
+      # absence of failures can be told apart from an absence of runs.
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "### Registrar check"
+            echo ""
+            echo "Ran on $(date -u '+%Y-%m-%d %H:%M UTC') — scheduled daily, 06:17 UTC."
+            echo ""
+            echo '```text'
+            cat "$VERDICT" 2>/dev/null || echo "(the check produced no output)"
+            echo '```'
+            echo ""
+            echo "A failing run comments on the issue titled \"Scheduled registrar check failed —"
+            echo "glamcleaners.net\"; a passing run closes it. If this workflow has stopped appearing,"
+            echo "check that Actions schedules are enabled for the repository: GitHub disables them"
+            echo "after 60 days with no commits on the default branch."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -7,7 +7,12 @@
   --ink-soft: #6f5f61;
   --ivory: #fcfaf6;
   --linen: #f4eee8;
-  --taupe: #b3a39b;
+  /* Small text, so it has to clear 4.5:1 on both --ivory and --linen: #b3a39b, the old value, sat
+     at 2.1–2.3 and was the only thing failing an accessibility audit. Decorative lines use --line
+     and are unaffected. */
+  --taupe: #75625a;
+  /* The same muted role on the dark cards, where the value above would disappear. */
+  --taupe-light: #c9bab6;
   --rose: #c86c82;
   --rose-deep: #9f4e64;
   --champagne: #e9d7be;

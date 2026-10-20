@@ -35,7 +35,12 @@
   --ink-soft: #6f5f61;
   --ivory: #fcfaf6;
   --linen: #f4eee8;
-  --taupe: #b3a39b;
+  /* Small text, so it has to clear 4.5:1 on both --ivory and --linen: #b3a39b, the old value, sat
+     at 2.1–2.3 and was the only thing failing an accessibility audit. Decorative lines use --line
+     and are unaffected. */
+  --taupe: #75625a;
+  /* The same muted role on the dark cards, where the value above would disappear. */
+  --taupe-light: #c9bab6;
   --rose: #c86c82;
   --rose-deep: #9f4e64;
   --champagne: #e9d7be;
@@ -185,7 +190,7 @@ h1 em { font-style: italic; color: var(--rose-deep); }
 <img class="logo" src="../apple-touch-icon.png" alt="" width="60" height="60">
 <p class="eyebrow"><i aria-hidden="true"></i> GTC / EST. 2018</p>
 <h1>Glam Team<br><em>Cleaners</em></h1>
-<p class="lede">Thoughtful cleaning with a polished touch. Residential and commercial, across the greater city.</p>
+<p class="lede">Thoughtful cleaning with a polished touch. Residential and commercial, across greater Baltimore.</p>
 <p class="person">Kelly Martínez <span>Estimator</span></p>
 <p class="person-note">Quotes, scheduling and questions</p>
 </header>

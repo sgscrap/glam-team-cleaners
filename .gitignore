@@ -13,6 +13,10 @@ _site/
 # Bytecode from the tools that import each other (scripts/photos.py, not part of the site).
 __pycache__/
 
+# The mail snapshot this machine took before a nameserver move. Local evidence for one cutover,
+# not something a later run should inherit from the repository.
+mail-baseline.json
+
 # Logs.
 *.log
 npm-debug.log*

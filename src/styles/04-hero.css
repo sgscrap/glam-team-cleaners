@@ -14,6 +14,9 @@
 .hero-proof strong, .hero-proof small { display: block; }
 .hero-proof strong { color: var(--ink); font: 500 10px var(--mono); }
 .hero-proof small { font-size: 10px; }
+/* Where the business works, in the first screen: a visitor decides whether to keep reading on the
+   question of coverage, and the footer is too late to answer it. */
+.hero-area { margin-top: 16px; font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--taupe); }
 
 .hero-art { position: relative; height: 496px; }
 .hero-photo { height: 100%; overflow: hidden; }

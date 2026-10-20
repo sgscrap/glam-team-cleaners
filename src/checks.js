@@ -22,7 +22,7 @@ export const SEARCH_LIMITS = [['title', 60], ['description', 160]];
  * construction, so a key dropped from the data would silently strip the consumer's labels
  * instead of failing the build.
  */
-export const RUNTIME_KEYS = ['menu', 'success', 'handoff'];
+export const RUNTIME_KEYS = ['menu', 'success', 'handoff', 'compare'];
 
 /**
  * What a LocalBusiness rich result needs; whatever is absent is named in the failure.
@@ -965,8 +965,68 @@ export function assertPhotographsWithinBudget(photographs, maxBytes) {
   return photographs.reduce((heaviest, photo) => (photo.bytes > heaviest.bytes ? photo : heaviest), { path: 'none', bytes: 0 });
 }
 
-/* --- the gate the work has to pass through ------------------------------- */
+/**
+ * A gallery entry the page cannot show, or a comparison that is not one frame twice.
+ *
+ * An entry carries photographs — one or more frames, any of which may itself hold the before and
+ * after side by side — or a pair the page puts on a sliding handle. Never both: the renderer would
+ * put one of them on a branch the visitor never reaches, while the file was still generated and
+ * shipped, which is the most expensive way to be wrong. An empty photograph list is the same
+ * mistake from the other side: a caption with no picture over it.
+ *
+ * A pair has to be one frame twice. The comparison draws one photograph over the other and clips
+ * the top one at the handle, which only reads as one room while the same point in the room lands
+ * at the same pixel on both sides — so the two frames must be the same shape, because the cell
+ * crops with `object-fit: cover` and a pair of different shapes is cropped differently on each
+ * side of the seam. Nothing else can see that: every number is plausible on its own, the geometry
+ * guard holds each half to its own master, and a reviewer looking at two pictures of one room has
+ * no reason to compare their aspect ratios. The disagreement exists only in the relationship
+ * between them, which is what this measures. Compared by cross-multiplication, because the
+ * dimensions are integers.
+ *
+ * The last case is a pair with a side missing. A lone `before` renders as the typographic panel, so
+ * a photograph somebody took would quietly leave the page — and the data comment calls that state
+ * unavailable, not broken. It is broken.
+ *
+ * Returns what the section will actually show, so the build reports the page rather than the rule.
+ */
+export function assertGalleryImages(items) {
+  const failures = [];
+  const counts = { photographs: 0, comparisons: 0 };
+  for (const item of items) {
+    const { tag, photos, before, after } = item;
+    if (photos && (before || after)) {
+      failures.push(`${tag} has photographs and a before/after pair, and the page can only show one of them`);
+      continue;
+    }
+    if (photos && !photos.length) {
+      failures.push(`${tag} has an empty photograph list, so the entry would render a caption over nothing`);
+      continue;
+    }
+    if (photos) {
+      counts.photographs += photos.length;
+      continue;
+    }
+    if (Boolean(before) !== Boolean(after)) {
+      // "an after photograph" and "a before photograph": the article is not decoration here — a
+      // message that reads as broken English is a message somebody skims past.
+      const [present, missing, article] = before ? ['before', 'after', 'a'] : ['after', 'before', 'an'];
+      failures.push(`${tag} has ${article} ${present} photograph and no ${missing}, so the entry would render as a panel and the photograph would leave the page`);
+      continue;
+    }
+    if (!before) continue;
+    counts.comparisons += 1;
+    if (before.width * after.height !== after.width * before.height) {
+      failures.push(`${tag} compares ${before.master} (${before.width}x${before.height}) with ${after.master} (${after.width}x${after.height}), and two frames of different shapes are cropped differently, so the seam jumps as the handle moves`);
+    }
+  }
+  if (failures.length) {
+    throw new Error(`The work section cannot show this: ${failures.join('; ')}`);
+  }
+  return counts;
+}
 
+/* --- the gate the work has to pass through ------------------------------- */
 /**
  * Package managers are the one family of command the pre-commit hook cannot use here.
  *

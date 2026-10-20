@@ -18,6 +18,9 @@
  * so the request is read off the socket rather than through a client that would refuse it, and a
  * redirect is reported with its destination instead of being followed.
  *
+ * The alias is asked four times, not once (see src/alias.js), and its certificate is read from the
+ * handshake itself: a 301 behind a warning is not a working link, and neither is a 302.
+ *
  * Run it by hand after touching DNS or Pages settings:
  *
  *     npm run domain
@@ -28,12 +31,25 @@
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { connect } from 'node:tls';
-import { resolve4, resolve6, resolveCname } from 'node:dns/promises';
 import { site } from '../src/data.js';
-import { HOST, LINK_HOST, PAGES_A, PAGES_AAAA, PAGES_DOMAIN, ZONE_FILE } from '../src/dns.js';
-import { LINK_SITE_URL } from '../src/link-site.js';
+import { aliasForms, redirectVerdict, tlsVerdict } from '../src/alias.js';
+import { dechunk, probe } from '../src/probe.js';
+import { HOST, LINK_HOST, MAIL_OBSERVED_ON, PAGES_A, PAGES_AAAA, PAGES_DOMAIN, ZONE_FILE } from '../src/dns.js';
+import { collectAnswers, diffZone, rowLine, targetRecords } from '../src/zone-diff.js';
 import { LINKS_URL } from '../src/links.js';
+
+/**
+ * A lookup that failed ends the script with one line instead of a stack trace, and says which kind
+ * of answer is missing. Not every record here is a failure waiting to happen: a name that holds no
+ * record and a name whose lookup timed out look identical in a resolver's log and mean opposite
+ * things, and only one of them is worth acting on.
+ */
+process.on('uncaughtException', error => {
+  console.error(`\n✗ ${error.message}`);
+  console.error('  Nothing was judged: a lookup that failed is not the same answer as a record');
+  console.error('  that is missing. Re-run it.\n');
+  process.exitCode = 1;
+});
 
 /**
  * The pages this build emits, as the address each must answer on and the file holding it. Both are
@@ -61,82 +77,125 @@ const fail = (text, why) => {
 /** A decision about every other name on the domain, not something the canonicals depend on. */
 const warn = text => say('!', text);
 
-/** Every address the name answers with, sorted, so two lists compare as sets and not as orders. */
-const addresses = async (name, type) => {
-  try {
-    const found = await (type === 'AAAA' ? resolve6(name) : resolve4(name));
-    return [...new Set(found)].sort();
-  } catch (error) {
-    if (error.code === 'ENODATA' || error.code === 'ENOTFOUND') return [];
-    throw error;
-  }
+/* --- DNS, the target state record by record ------------------------------- */
+
+/**
+ * Every record the target state holds, against what the domain answers — one line per record, under
+ * the check that owns it. The check lines keep the wording they have always had, because each one is
+ * a sentence about what the domain is doing; what is new is the line beneath: which of the records
+ * that check owns disagree, and what answered instead. A check that passes prints nothing under it
+ * unless a record has something to say — a mail value the provider has changed since it was
+ * recorded, or a record answering that the target state does not know about.
+ */
+const target = targetRecords();
+const probeName = `wildcard-${Math.random().toString(36).slice(2, 8)}.${host}`;
+const answers = await collectAnswers([...new Set(target.map(record => record.name)), probeName]);
+const diff = diffZone(target, answers);
+
+const liveAt = (name, type) => answers[name]?.[type] ?? [];
+const sameSet = (left, right) => [...left].map(String).sort().join('\u0000') === [...right].map(String).sort().join('\u0000');
+
+/** The rows one check owns, and the ones worth printing: all of them when it failed. */
+const rowsAt = (name, types) => diff.filter(row => row.name === name && types.includes(row.type));
+const detail = (rows, failed) => {
+  const shown = failed ? rows : rows.filter(row => row.severity !== 'pass' || row.why);
+  for (const row of shown) console.log(rowLine(row));
 };
 
-const sameSet = (left, right) => left.join() === [...right].sort().join();
+console.log(`\nDNS  the target state, against what ${host} answers\n`);
 
-/* --- DNS ----------------------------------------------------------------- */
-
-const apex = await addresses(host, 'A');
-if (sameSet(apex, PAGES_A)) {
+const apexRows = rowsAt(host, ['A']);
+const apexA = liveAt(host, 'A');
+if (sameSet(apexA, PAGES_A)) {
   pass(`DNS  ${host} A → the four GitHub Pages addresses`);
-} else if (!apex.length) {
+  detail(apexRows, false);
+} else if (!apexA.length) {
   fail(`DNS  ${host} has no A record`, 'nothing can answer for the domain');
+  detail(apexRows, true);
 } else {
   fail(
-    `DNS  ${host} A → ${apex.join(', ')}`,
+    `DNS  ${host} A → ${apexA.join(', ')}`,
     `GitHub Pages answers only on ${PAGES_A.join(', ')}`,
   );
+  detail(apexRows, true);
 }
 
-const apexV6 = await addresses(host, 'AAAA');
+const v6Rows = rowsAt(host, ['AAAA']);
+const apexV6 = liveAt(host, 'AAAA');
 if (!apexV6.length) {
-  // Optional, per GitHub's own guidance: IPv6 is recommended, never required.
+  // Optional, per GitHub's own guidance: IPv6 is recommended, never required — so its four records
+  // are not listed as missing, which would read as four things to fix.
   notes.push(`no AAAA record for ${host} — optional, the site works over IPv4`);
 } else if (sameSet(apexV6, PAGES_AAAA)) {
   pass(`DNS  ${host} AAAA → the four GitHub Pages addresses`);
+  detail(v6Rows, false);
 } else {
   fail(`DNS  ${host} AAAA → ${apexV6.join(', ')}`, 'GitHub Pages answers only on its own four');
+  detail(v6Rows, true);
 }
 
+// A CNAME is not the only way to point a subdomain at Pages — several providers flatten it into the
+// site's own addresses, which GitHub accepts, and which the diff reads as the record being answered.
 const www = `www.${host}`;
-let wwwCname = [];
-try {
-  wwwCname = await resolveCname(www);
-} catch {
-  // A CNAME is not the only way to point a subdomain at Pages — several providers flatten it.
-}
-const wwwA = await addresses(www, 'A');
-if (wwwCname.some(name => name.toLowerCase() === `${PAGES_DOMAIN}.`) || sameSet(wwwA, PAGES_A)) {
+const wwwCname = liveAt(www, 'CNAME');
+const wwwA = liveAt(www, 'A');
+const wwwRows = rowsAt(www, ['CNAME', 'A']);
+if (wwwCname.includes(PAGES_DOMAIN) || sameSet(wwwA, PAGES_A)) {
   pass(`DNS  ${www} → ${wwwCname.length ? wwwCname.join(', ') : 'the GitHub Pages addresses'}`);
+  detail(wwwRows, false);
 } else {
   fail(
     `DNS  ${www} → ${wwwCname.length ? wwwCname.join(', ') : wwwA.join(', ') || 'nothing'}`,
     `it should be a CNAME to ${PAGES_DOMAIN}`,
   );
+  detail(wwwRows, true);
 }
 
 /**
- * The subdomain. It is a second Pages site rather than a path, so its record is a CNAME of its
- * own — and until that record exists, the wildcard is what answers for it, with the forwarder.
+ * The subdomain. The record exists so the name resolves and, once proxied, so Cloudflare can see it
+ * and apply the redirect rule — until that record exists and is proxied, the wildcard answers for it
+ * with the forwarder.
  */
-let linksCname = [];
-try {
-  linksCname = await resolveCname(LINK_HOST);
-} catch {
-  // A flattened CNAME answers in A records instead; GitHub accepts either.
-}
-const linksA = await addresses(LINK_HOST, 'A');
-if (linksCname.some(name => name.toLowerCase() === `${PAGES_DOMAIN}.`)) {
+const linksCname = liveAt(LINK_HOST, 'CNAME');
+const linksA = liveAt(LINK_HOST, 'A');
+const linksRows = rowsAt(LINK_HOST, ['CNAME', 'A']);
+if (linksCname.includes(PAGES_DOMAIN)) {
   pass(`DNS  ${LINK_HOST} → ${linksCname.join(', ')}`);
+  detail(linksRows, false);
 } else if (sameSet(linksA, PAGES_A)) {
   pass(`DNS  ${LINK_HOST} → the GitHub Pages addresses`);
+  detail(linksRows, false);
 } else if (linksA.length) {
   fail(
     `DNS  ${LINK_HOST} → ${linksA.join(', ')}`,
     `it should be a CNAME to ${PAGES_DOMAIN}; today the wildcard is answering`,
   );
+  detail(linksRows, true);
 } else {
   fail(`DNS  ${LINK_HOST} has no record`, `add a CNAME for links pointing at ${PAGES_DOMAIN}`);
+  detail(linksRows, true);
+}
+
+/**
+ * The mail records the target state records, asked the same way and under the same rule the diff
+ * applies to them: carried across a move rather than prescribed by it, so a value that answers
+ * differently is reported — the mail platform may have changed it since it was recorded, and that is
+ * not this migration's business — while a record that answers nothing at all is a failure, because
+ * that is mail with nowhere to go and no other check in this script would see it.
+ */
+const mailRows = [...rowsAt(host, ['MX', 'TXT']), ...rowsAt(`_dmarc.${host}`, ['TXT'])];
+const recorded = mailRows.filter(row => row.source === 'observed');
+const missing = recorded.filter(row => row.status === 'missing');
+
+if (missing.length) {
+  fail(
+    `DNS  the mail records recorded in the target state → nothing answers for ${missing.map(row => `${row.type} ${row.name}`).join(', ')}`,
+    'mail routes on exactly these records, and nothing else here reports one missing',
+  );
+  detail(mailRows, true);
+} else {
+  pass(`DNS  the mail records recorded in the target state → MX, SPF and DMARC answer, as recorded on ${MAIL_OBSERVED_ON}`);
+  detail(mailRows, false);
 }
 
 /**
@@ -145,9 +204,7 @@ if (linksCname.some(name => name.toLowerCase() === `${PAGES_DOMAIN}.`)) {
  * guidance is not to use one, since it hands any unclaimed subdomain to whoever asks; reported
  * rather than failed, because the apex is what the canonicals depend on.
  */
-
-const probeName = `wildcard-${Math.random().toString(36).slice(2, 8)}.${host}`;
-const wildcard = await addresses(probeName, 'A');
+const wildcard = liveAt(probeName, 'A');
 if (wildcard.length) {
   warn(`DNS  *.${host} resolves (${probeName} → ${wildcard.join(', ')}) — a wildcard answers for every subdomain, and today it answers with the forwarder`);
 } else {
@@ -161,62 +218,13 @@ if (wildcard.length) {
  * forwarding somewhere else (so a redirect is read, never followed), and that what it serves is
  * the build in this checkout rather than an older one.
  *
- * The request is written by hand and the answer parsed leniently, for one reason: the provider
- * currently answering this domain ends its header lines with a bare newline, which `fetch` and
- * `https.get` both refuse to parse. Refusing to read it would leave the check saying "the request
- * failed" about a server that answered perfectly clearly — with a 301 to the Pages address.
+ * The request is written by hand (src/probe.js) and the answer parsed leniently, for one reason:
+ * the provider currently answering this domain ends its header lines with a bare newline, which
+ * `fetch` and `https.get` both refuse to parse. Refusing to read it would leave the check saying
+ * "the request failed" about a server that answered perfectly clearly — with a 301 to the Pages
+ * address.
  */
 const digest = buffer => createHash('sha256').update(buffer).digest('hex').slice(0, 12);
-
-/** De-frame a chunked body: GitHub sends one, and the comparison is on bytes, not on framing. */
-const dechunk = buffer => {
-  const parts = [];
-  let at = 0;
-  while (at < buffer.length) {
-    const end = buffer.indexOf('\r\n', at);
-    if (end === -1) break;
-    const size = Number.parseInt(buffer.subarray(at, end).toString('latin1'), 16);
-    if (!Number.isFinite(size) || size <= 0) break;
-    parts.push(buffer.subarray(end + 2, end + 2 + size));
-    at = end + 2 + size + 2;
-  }
-  return Buffer.concat(parts);
-};
-
-const probe = url => new Promise((resolve, reject) => {
-  const { hostname, pathname, search } = new URL(url);
-  const socket = connect({ host: hostname, servername: hostname, port: 443 }, () => {
-    socket.write(`GET ${pathname}${search} HTTP/1.1\r\n`
-      + `Host: ${hostname}\r\n`
-      + 'User-Agent: glam-team-cleaners domain check\r\n'
-      + 'Accept: */*\r\n'
-      + 'Connection: close\r\n\r\n');
-  });
-  const chunks = [];
-  socket.on('data', chunk => chunks.push(chunk));
-  socket.on('end', () => {
-    const raw = Buffer.concat(chunks);
-    // Headers end at the first blank line, in whichever line-ending convention the server used.
-    const crlf = raw.indexOf('\r\n\r\n');
-    const lf = raw.indexOf('\n\n');
-    const boundary = crlf !== -1 ? crlf + 4 : lf !== -1 ? lf + 2 : raw.length;
-    const lines = raw.subarray(0, boundary).toString('latin1').split(/\r?\n/);
-    const header = name => lines
-      .map(line => new RegExp(`^${name}:\\s*(.+)$`, 'i').exec(line.trim())?.[1]?.trim())
-      .find(Boolean);
-    resolve({
-      status: Number(/^HTTP\/\d(?:\.\d)? (\d{3})/.exec(lines[0]?.trim() ?? '')?.[1]),
-      location: header('location'),
-      chunked: /chunked/i.test(header('transfer-encoding') ?? ''),
-      body: raw.subarray(boundary),
-    });
-  });
-  socket.on('error', reject);
-  socket.setTimeout(20000, () => socket.destroy(new Error('no answer within 20s')));
-});
-
-/** What each address says it is, read from the page it served. */
-const declared = new Map();
 
 for (const { url, file } of PAGES) {
   const local = readFileSync(file);
@@ -248,8 +256,6 @@ for (const { url, file } of PAGES) {
   }
 
   const served = response.chunked ? dechunk(response.body) : response.body;
-  const canonical = /<link rel="canonical" href="([^"]+)"/.exec(served.toString('utf8'))?.[1];
-  if (canonical) declared.set(url, canonical);
   if (served.equals(local)) {
     pass(`HTTP ${url} serves ${file} byte for byte (${digest(served)})`);
   } else {
@@ -263,49 +269,69 @@ for (const { url, file } of PAGES) {
 /* --- the alias ------------------------------------------------------------ */
 
 /**
- * The link page answers on two addresses and there are two honest answers at the second one.
+ * The link page has one address and one name that points at it: a 301 to the canonical page, in
+ * every form the alias can be reached in (src/alias.js lists which, and why each one is a separate
+ * question).
  *
- * The intended one is a 301 to the canonical page: the alias then reaches no second copy at all,
- * which is what "one address" means at its strongest, and it is what the Cloudflare redirect rule
- * in `npm run dns:cloudflare` installs. Until the zone is on Cloudflare, the second Pages site
- * serves the page itself — acceptable, because that copy names the canonical page, but reported,
- * since a second copy is exactly the thing a canonical only mitigates.
+ * A page answering instead is the pre-rule state — or the forwarder — and is reported as that,
+ * rather than as a missing page: the two states have different fixes and only one of them involves
+ * DNS. The page that used to answer here was a second Pages site, and it is retired, so nothing
+ * maintained lives behind this name any more.
  */
-const aliasPage = readFileSync('links-site/index.html');
-const canonicalFor = url => declared.get(url);
 
+/**
+ * The certificate, read before any redirect is judged. Cloudflare issues for a proxied name as soon
+ * as it is proxied, so this is a separate question with a separate cause — and a 301 nobody can
+ * reach past a warning is not a working link. Verification is Node's own: the chain and the name
+ * are checked against the system roots to get this far, so all that is left is to report it.
+ */
+let handshake;
 try {
-  const response = await probe(LINK_SITE_URL);
-  const target = (response.location ?? '').replace(/\/$/, '');
-  const wanted = LINKS_URL.replace(/\/$/, '');
-
-  if (!Number.isFinite(response.status)) {
-    // The same provider that answers the apex with something that is not an HTTP response.
-    fail(`alias  ${LINK_SITE_URL}`, 'the host answered with bytes that are not an HTTP response at all');
-  } else if (response.status >= 300 && response.status < 400) {
-    if (target === wanted) {
-      pass(`alias  ${LINK_HOST} → ${response.status} ${response.location}`);
-    } else {
-      fail(`alias  ${LINK_HOST} → ${response.status} ${response.location ?? ''}`, `it should redirect to ${LINKS_URL}`);
-    }
-  } else if (response.status === 200) {
-    const served = response.chunked ? dechunk(response.body) : response.body;
-    const aliasCanonical = /<link rel="canonical" href="([^"]+)"/.exec(served.toString('utf8'))?.[1];
-    if (!served.equals(aliasPage)) {
-      fail(`alias  ${LINK_SITE_URL} serves something else (${served.length} bytes)`, 'neither the page nor a redirect to it');
-    } else if (aliasCanonical && aliasCanonical === canonicalFor(`${site.url}/links/`)) {
-      notes.push(`${LINK_HOST} still serves the page and names ${aliasCanonical} — the redirect rule would remove that second copy`);
-    } else {
-      fail(
-        `canonical  ${LINK_HOST} names ${aliasCanonical ?? 'nothing'}`,
-        `both addresses must name ${LINKS_URL}, or redirect to it`,
-      );
-    }
-  } else {
-    fail(`alias  ${LINK_SITE_URL} → ${response.status}`, 'the alias must redirect to the canonical page, or serve it');
-  }
+  const { certificate } = await probe(`https://${LINK_HOST}/`);
+  handshake = { certificate };
 } catch (error) {
-  fail(`alias  ${LINK_SITE_URL}`, `the request failed: ${error.message}`);
+  handshake = { error };
+}
+
+const tls = tlsVerdict(handshake);
+if (tls.ok) {
+  pass(`TLS  ${LINK_HOST} — ${tls.text}`);
+} else {
+  fail(`TLS  ${LINK_HOST}`, tls.why);
+  notes.push('the alias forms were not asked: the connection never became a trusted HTTPS session');
+}
+
+if (tls.ok) {
+  for (const { form, url, expected } of aliasForms()) {
+    let response;
+    try {
+      response = await probe(url);
+    } catch (error) {
+      fail(`alias  ${form}  ${url}`, `the request failed: ${error.message}`);
+      continue;
+    }
+
+    const verdict = redirectVerdict(expected, response);
+    if (verdict.ok) {
+      pass(`alias  ${form}  ${url} → ${verdict.text}`);
+      continue;
+    }
+
+    // A 200 here means something answered with a page instead of a redirect. Saying so separates
+    // "the redirect is missing" from "the host answers with something else".
+    const served = response.chunked ? dechunk(response.body) : response.body;
+    const answered = response.status === 200;
+    const canonical = answered
+      ? /<link rel="canonical" href="([^"]+)"/.exec(served.toString('utf8'))?.[1]
+      : undefined;
+
+    fail(
+      `alias  ${form}  ${url}`,
+      answered
+        ? `the name answers with a page${canonical ? ` naming ${canonical}` : ''} instead of a 301 — the rule is not in front of it, or the record is still not proxied`
+        : verdict.why,
+    );
+  }
 }
 
 /* --- the verdict --------------------------------------------------------- */
@@ -314,24 +340,49 @@ for (const note of notes) say('·', note);
 
 if (failures.length) {
   console.error(`\n✗ ${failures.length} thing(s) stand between ${host} and this site.\n`);
-  console.error(`  One action fixes them: replace what is at the DNS panel with ${ZONE_FILE},`);
-  console.error('  and delete the forward and any wildcard record. The same records, inline:');
-  console.error('');
-  console.error(`     A      @     ${PAGES_A.join(', ')}`);
-  console.error(`     AAAA   @     ${PAGES_AAAA.join(', ')}            (optional)`);
-  console.error(`     CNAME  www   ${PAGES_DOMAIN}`);
-  console.error(`     CNAME  links ${PAGES_DOMAIN}`);
-  console.error('');
-  console.error('  The forward is the part that rewrites every path, which is why /links/ lands on');
-  console.error('  the homepage instead of the page a bio would point at. Links is its own name:');
-  console.error('  today a second Pages site, and once the zone is on Cloudflare a redirect to');
-  console.error('  the canonical page instead — npm run dns:cloudflare installs both halves.');
-  console.error('');
-  console.error('  Once DNS answers, attaching the domain is one call — GitHub then issues the');
-  console.error('  certificate, and the default Pages address starts redirecting here:');
-  console.error(`     gh api -X PUT repos/sgscrap/glam-team-cleaners/pages -f cname=${host}`);
-  console.error('');
+
+  /**
+   * Two different repairs, and the message picks the one that applies. With DNS right and only the
+   * alias failing, sending someone back to the DNS panel would be advice for a problem they no
+   * longer have; with the zone not moved yet, the redirect rule is not the first thing to fix.
+   */
+  const onlyAlias = failures.every(text => /^(alias|TLS)\b/.test(text));
+
+  if (onlyAlias) {
+    console.error('  DNS and both pages are right. What is left is the alias: the redirect rule, and');
+    console.error('  the proxy state that lets Cloudflare see the name at all. Both are installed by');
+    console.error('  the second half of the same command, which is safe to re-run:');
+    console.error('');
+    console.error('     npm run dns:cloudflare -- --apply');
+    console.error('');
+    console.error('  If that changes nothing, read the two things it wrote: the rule must match');
+    console.error(`  ${LINK_HOST} in http_request_dynamic_redirect, and its CNAME must be proxied.`);
+    console.error('');
+  } else {
+    console.error(`  One action fixes the DNS: replace what is at the panel with ${ZONE_FILE},`);
+    console.error('  and delete the forward and any wildcard record. The ✗ rows above name exactly');
+    console.error('  which records disagree, and the ! rows what is answering in their place.');
+    console.error('');
+    console.error('  The same records, inline:');
+    console.error('');
+    console.error(`     A      @     ${PAGES_A.join(', ')}`);
+    console.error(`     AAAA   @     ${PAGES_AAAA.join(', ')}            (optional)`);
+    console.error(`     CNAME  www   ${PAGES_DOMAIN}`);
+    console.error(`     CNAME  links ${PAGES_DOMAIN}`);
+    console.error('');
+    console.error('  The forward is the part that rewrites every path, which is why /links/ lands on');
+    console.error('  the homepage instead of the page a bio would point at. Links is its own name:');
+    console.error('  a redirect to the canonical page, which npm run dns:cloudflare installs along');
+    console.error('  with the records.');
+    console.error('');
+
+    console.error('  Once DNS answers, attaching the domain is one call — GitHub then issues the');
+    console.error('  certificate, and the default Pages address starts redirecting here:');
+    console.error(`     gh api -X PUT repos/sgscrap/glam-team-cleaners/pages -f cname=${host}`);
+    console.error('');
+  }
+
   process.exit(1);
 }
 
-console.log(`\n✓ ${host} serves this build, every published URL names it, and ${LINK_HOST} serves the link page at its root.`);
+console.log(`\n✓ ${host} serves this build, every published URL names it, and ${LINK_HOST} redirects to ${LINKS_URL} in every form, over a trusted certificate.`);
